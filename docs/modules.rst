@@ -2,5 +2,5 @@
 Modules
 =======
 
-.. automodule:: weathergraphnet.mutable_number
+.. automodule:: weathergraphnet.utils
    :members:
