@@ -12,6 +12,7 @@ repos:
     -   id: end-of-file-fixer
         exclude: docs/html
     -   id: trailing-whitespace
+        exclude: docs/html
 -   repo: local
     hooks:
     -   id: forbidden-files-copier-rej
