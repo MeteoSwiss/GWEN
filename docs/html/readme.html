@@ -56,8 +56,8 @@ pip<span class="w"> </span>install<span class="w"> </span>--editable<span class=
 </div>
 <p class="linemarker linemarker-35"><em>Warning:</em> Make sure you use the right pip, i.e. the one from the installed conda environment (<code class="docutils literal notranslate"><span class="pre">which</span> <span class="pre">pip</span></code> should point to something like <code class="docutils literal notranslate"><span class="pre">path/to/miniconda/envs/&lt;package_env_name&gt;/bin/pip</span></code>).</p>
 <p class="linemarker linemarker-37">Once your package is installed, run the tests by typing:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">conda</span> <span class="n">activate</span> <span class="o">&lt;</span><span class="n">package_env_name</span><span class="o">&gt;</span>
-<span class="n">pytest</span>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>conda<span class="w"> </span>activate<span class="w"> </span>&lt;package_env_name&gt;
+pytest
 </pre></div>
 </div>
 <p class="linemarker linemarker-44">If the tests pass, you are good to go. If not, contact the package administrator Simon Adamov. Make sure to update your requirement files and export your environments after installation

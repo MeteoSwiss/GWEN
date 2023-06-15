@@ -15,7 +15,7 @@ Output:
 """
 # Third-party
 import matplotlib.pyplot as plt  # type: ignore
-import xarray as xr
+import xarray as xr  # type: ignore
 from matplotlib import animation  # type: ignore
 
 # Define the path to the NetCDF file

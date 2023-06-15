@@ -12,7 +12,7 @@ import os
 import re
 
 # Third-party
-import xarray as xr
+import xarray as xr  # type: ignore
 
 # Define the path to the directory containing the data files
 data_path = "/scratch/sadamov/icon/icon-nwp/cpu/experiments/"
