@@ -1,21 +1,27 @@
 """Create an animated gif of a variable from a NetCDF file using matplotlib.
 
-The module imports the necessary libraries, defines the path to the NetCDF file, and
-opens the file using xarray. It then defines the variable to plot, calculates the
-minimum and maximum values of the variable, and creates a new figure object. The first
-time step of the variable is plotted, and an update function is defined to update the
-plot for each frame of the animation. Finally, the animation is saved as a gif with the
-specified filename.
+The script opens a NetCDF file, extracts a variable, and creates an animated gif of the
+variable over time. The output gif is saved to the specified filename.
 
 Example usage:
     $ python create_gif.py
 
-Output:
-    A gif animation of the specified variable from the NetCDF file.
+Attributes:
+    nc_file (str): The name of the NetCDF file to open.
+    nc_path (str): The path to the NetCDF file.
+    var_name (str): The name of the variable to plot.
+    var_min (float): The minimum value of the variable.
+    var_max (float): The maximum value of the variable.
+    fig (matplotlib.figure.Figure): The figure object for the plot.
+    ax (matplotlib.axes.Axes): The axes object for the plot.
+    im (matplotlib.image.AxesImage): The image object for the plot.
+    ani (matplotlib.animation.FuncAnimation): The animation object for the plot.
+    output_filename (str): The name of the output gif file.
+
 """
 # Third-party
 import matplotlib.pyplot as plt  # type: ignore
-import xarray as xr  # type: ignore
+import xarray as xr
 from matplotlib import animation  # type: ignore
 
 # Define the path to the NetCDF file

@@ -24,7 +24,7 @@ filename_regex = r"atmcirc-straka_93_(.*)DOM01_ML_20080801T000000Z.nc"
 filename_pattern = re.compile(filename_regex)
 
 # Define the path to the Zarr archive where the data will be stored
-zarr_path = "/scratch/sadamov/icon/icon-nwp/cpu/experiments/data_combined.zarr"
+zarr_path = "/scratch/sadamov/icon/icon-nwp/cpu/experiments/data_combined_2.zarr"
 
 # Get a list of all the folders in the data directory
 folders = os.listdir(data_path)
@@ -45,9 +45,8 @@ for folder in folders:
                 data = xr.open_dataset(os.path.join(file_path, file), engine="netcdf4")
                 # Add a new dimension called "member" and set its values based on the
                 # matched string
-                data.coords["member"] = xr.DataArray([match.group(1)], dims=["member"])
-                # Make "member" a dimension as well as a coordinate
-                data = data.set_index(member="member")
+                data = data.assign_coords(member=match.group(1))
+                data = data.expand_dims({"member": 1})
                 # Chunk the data along the "member" and "time" dimensions for efficient
                 # storage
                 data = data.chunk(
@@ -64,11 +63,15 @@ for folder in folders:
                     # If the Zarr archive exists, open it in "a" (append) mode
                     data.to_zarr(
                         zarr_path,
-                        mode="a",
-                        compute=True,
                         consolidated=True,
+                        mode="a",
                         append_dim="member",
                     )
                 else:
                     # If the Zarr archive does not exist, create it in "w" (write) mode
-                    data.to_zarr(zarr_path, mode="w", compute=True, consolidated=True)
+                    data.to_zarr(
+                        zarr_path,
+                        mode="w",
+                        consolidated=True,
+                    )
+                print(f"Loaded {file}", flush=True)
