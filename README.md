@@ -4,15 +4,18 @@
 
 Once you created or cloned this repository, make sure the installation is running properly. Install the package dependencies with the provided script `setup_env.sh`.
 Check available options with
+
 ```bash
 tools/setup_env.sh -h
 ```
+
 We distinguish pinned installations based on exported (reproducible) environments and free installations where the installation
 is based on top-level dependencies listed in `requirements/requirements.yml`. If you start developing, you might want to do an unpinned installation and export the environment:
 
 ```bash
 tools/setup_env.sh -u -e -n <package_env_name>
 ```
+
 *Hint*: If you are the package administrator, it is a good idea to understand what this script does, you can do everything manually with `conda` instructions.
 
 *Hint*: Use the flag `-m` to speed up the installation using mamba. Of course you will have to install mamba first (we recommend to install mamba into your base
@@ -30,7 +33,7 @@ pip install --editable .
 
 Once your package is installed, run the tests by typing:
 
-```
+```bash
 conda activate <package_env_name>
 pytest
 ```
@@ -42,7 +45,7 @@ every time you add new imports while developing. Check the next section to find 
 
 Generally, the source code of your library is located in `src/<library_name>`. The blueprint will generate some example code in `utils.py` and `cli.py`. `cli.py` thereby serves as an entry
 point for functionalities you want to execute from the command line, it is based on the Click library. If you do not need interactions with the command line, you should remove `cli.py`. Moreover, of course there exist other options for command line interfaces,
-a good overview may be found here (https://realpython.com/comparing-python-command-line-parsing-libraries-argparse-docopt-click/), we recommend however to use click. The provided example
+a good overview may be found here (<https://realpython.com/comparing-python-command-line-parsing-libraries-argparse-docopt-click/>), we recommend however to use click. The provided example
 code should provide some guidance on how the individual source code files interact within the library. In addition to the example code in `src/<library_name>`, there are examples for
 unit tests in `tests/<library_name>/`, which can be triggered with `pytest` from the command line. Once you implemented a feature (and of course you also
 implemented a meaningful test ;-)), you are likely willing to commit it. First, go to the root directory of your package and run pytest.
@@ -70,7 +73,7 @@ GitHub Actions or be implemented in a Jenkins pipeline (template for a plan avai
 ## Development tools
 
 As this package was created with the APN Python blueprint, it comes with a stack of development tools, which are described in more detail on
-(https://meteoswiss-apn.github.io/mch-python-blueprint/). Here, we give a brief overview on what is implemented.
+(<https://meteoswiss-apn.github.io/mch-python-blueprint/>). Here, we give a brief overview on what is implemented.
 
 ### Testing and coding standards
 
