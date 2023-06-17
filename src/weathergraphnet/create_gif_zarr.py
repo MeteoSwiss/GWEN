@@ -17,12 +17,13 @@ Output:
 import matplotlib.pyplot as plt  # type: ignore
 import xarray as xr  # type: ignore
 from matplotlib import animation  # type: ignore
+from pyprojroot import here
 
 # Define the variable to plot
-var_name = "temp"
+var_name = "theta_v"
 
 # Define the path to the zarr archive
-zarr_path = "/scratch/sadamov/icon/icon-nwp/cpu/experiments/data_combined.zarr"
+zarr_path = str(here()) + "/data/data_combined.zarr"
 
 # Open the NetCDF file
 ds = xr.open_zarr(zarr_path)
@@ -45,7 +46,7 @@ for member in ds.member.values:
     member_parts = member.split("_")[:-1]
     # Replace ".0" with " K", " m", " m"
     member_parts = [
-        f"Temp: {part} K;"
+        f"Temp':' {part} K;"
         if i == 0
         else f"Height: {part} m;"
         if i == 1
@@ -74,3 +75,6 @@ for member in ds.member.values:
 
     # Save the animation as a gif
     ani.save(output_filename, writer="imagemagick", dpi=100)
+
+    # Close the figure object
+    plt.close()

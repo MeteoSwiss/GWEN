@@ -96,7 +96,30 @@ and exclusively run your tests and checks on GitHub actions.
 
 ## Features
 
-- TODO
+The `train_gnn.py` script has the following features:
+
+- Loads data from a Zarr archive using Dask
+- Splits data into training and testing sets
+- Defines a GNN model using GCNConv layers
+- Trains the GNN model using the mean squared error loss function and the Adam optimizer
+
+### Dependencies
+
+The following dependencies are required to use this package:
+
+- dask
+- torch
+- torch_geometric
+- zarr
+
+### Usage
+
+To use this package, simply run the `train_gnn.py` script from the command line with the path to the Zarr archive as the only argument. For example:
+
+
+`python train_gnn.py data/data_combined.zarr`
+
+Note that this script assumes that the data in the Zarr archive is stored in a specific format. The data should be stored as a 4D array with dimensions (samples, channels, height, width), where the channels dimension contains the features for each node in the graph. The script also assumes that the labels for each sample are stored in the features of the nodes, and that the first `in_channels` features correspond to the input features and the remaining features correspond to the labels.
 
 ## Credits
 

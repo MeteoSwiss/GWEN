@@ -51,8 +51,8 @@ for folder in folders:
                 # storage
                 data = data.chunk(
                     chunks={
-                        "member": 1,
-                        "time": -1,
+                        "time": 32,
+                        "member": -1,
                         "height": -1,
                         "height_2": -1,
                         "height_3": -1,

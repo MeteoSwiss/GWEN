@@ -1,0 +1,2 @@
+u
+/scratch/sadamov/icon/icon-nwp/cpu/experiments/atmcirc-straka_93_-30.0_4000.0_2000.0/atmcirc-straka_93_-30.0_4000.0_2000.0_DOM01_ML_20080801T000000Z.nc

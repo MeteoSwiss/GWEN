@@ -1,0 +1,15 @@
+artifact_uri: file:///scratch-shared/meteoswiss/scratch/sadamov/pyprojects_data/weathergraphnet/mlruns/514671300300178463/2189411a43534509b361d6b199fe002b/artifacts
+end_time: null
+entry_point_name: ''
+experiment_id: '514671300300178463'
+lifecycle_stage: active
+run_id: 2189411a43534509b361d6b199fe002b
+run_name: enthused-mule-951
+run_uuid: 2189411a43534509b361d6b199fe002b
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1687036114335
+status: 1
+tags: []
+user_id: sadamov
