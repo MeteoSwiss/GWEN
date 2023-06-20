@@ -1,4 +1,4 @@
-# WeatherGraphNet: Simon Adamov's WeatherGraphNet to Generate Weather Model Ensemble Members
+# WeatherGraphNet to Generate Weather Model Ensemble Members
 
 ## Start developing
 
