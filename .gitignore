@@ -110,6 +110,5 @@ venv_*/
 # VS Code
 .vscode
 
-output/
-data/
-mlruns/
+output
+data
