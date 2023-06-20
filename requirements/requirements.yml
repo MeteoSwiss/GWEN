@@ -23,6 +23,7 @@ dependencies:
   - mypy>=0.991
   - pre-commit>=2.20
   - pytorch
+  - pytorch-lightning
   - zarr
   - dask-ml
   - mlflow
