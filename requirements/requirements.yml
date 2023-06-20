@@ -22,9 +22,10 @@ dependencies:
   - mccabe>=0.7
   - mypy>=0.991
   - pre-commit>=2.20
-  - torch
+  - pytorch
   - zarr
   - dask-ml
+  - mlflow
   - pydocstyle>=6.1
   - pylint>=2.15
   - pyprojroot
