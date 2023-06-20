@@ -21,8 +21,8 @@ def test_gnn_model():
         None
 
     """
-    in_channels = 2
-    out_channels = 1
+    in_channels = 10
+    out_channels = 10
     model = GNNModel(in_channels, out_channels)
     data = Data(
         x=torch.randn((in_channels, 1)),  # pylint: disable=no-member

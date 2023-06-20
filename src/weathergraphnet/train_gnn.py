@@ -42,7 +42,7 @@ import mlflow  # type: ignore
 import torch
 import xarray as xr  # type: ignore
 from pyprojroot import here
-from pytorch_lightning.loggers import MLFlowLogger
+from pytorch_lightning.loggers import MLFlowLogger  # type: ignore
 from torch import nn
 from torch import optim
 from torch_geometric.data import Data  # type: ignore
