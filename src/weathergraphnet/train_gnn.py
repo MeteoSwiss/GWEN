@@ -108,19 +108,19 @@ class GNNModel(torch.nn.Module):
 
     """
 
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, in_channels, out_channels, start_channels=1024):
         """Initialize the GNN model."""
         super().__init__()
-        self.conv1 = GCNConv(in_channels, 163840)
-        self.conv2 = GCNConv(163840, 81920)
-        self.conv3 = GCNConv(81920, 40960)
-        self.conv4 = GCNConv(40960, 20480)
-        self.conv5 = GCNConv(20480, 10240)
-        self.upconv1 = GCNConv(10240, 20480)
-        self.upconv2 = GCNConv(20480, 40960)
-        self.upconv3 = GCNConv(40960, 81920)
-        self.upconv4 = GCNConv(81920, 163840)
-        self.upconv5 = GCNConv(163840, out_channels)
+        self.conv1 = GCNConv(in_channels, start_channels)
+        self.conv2 = GCNConv(start_channels, start_channels // 2)
+        self.conv3 = GCNConv(start_channels // 2, start_channels // 4)
+        self.conv4 = GCNConv(start_channels // 4, start_channels // 8)
+        self.conv5 = GCNConv(start_channels // 8, start_channels // 16)
+        self.upconv1 = GCNConv(start_channels // 16, start_channels // 8)
+        self.upconv2 = GCNConv(start_channels // 8, start_channels // 4)
+        self.upconv3 = GCNConv(start_channels // 4, start_channels // 2)
+        self.upconv4 = GCNConv(start_channels // 2, start_channels)
+        self.upconv5 = GCNConv(start_channels, out_channels)
 
     def forward(self, data):
         """Perform a forward pass through the GNN model.
@@ -171,7 +171,7 @@ if __name__ == "__main__":
 
     # Define the loss function and optimizer
     criterion = nn.MSELoss()
-    optimizer = optim.Adam(model_gnn.parameters(), lr=0.001)
+    optimizer = optim.Adam(model_gnn.parameters(), lr=0.0001)
 
     # Define the data loader for the training set
     # pylint: disable=no-member
@@ -211,6 +211,6 @@ if __name__ == "__main__":
             loader_train_out,
             criterion.to(device),
             optimizer,
-            num_epochs=10,
+            num_epochs=4,
             logger=mlflow_logger,
         )
