@@ -1,6 +1,8 @@
 name: weathergraphnet
 channels:
   - conda-forge
+  - nvidia
+  - pytorch
 dependencies:
   - python>=3.10
   - pip>=22.3
@@ -12,25 +14,28 @@ dependencies:
   - boa>=0.14
   - codespell>=2.2
   - conda-build>=3.23
+  - cudatoolkit
+  - dask-ml
   - flake8-black>=0.3
   - flake8>=6.0
   - ipdb>=0.13
   - ipython>=8.7
   - isort>=5.12
+  - jupyter
   - mamba>=1.1
   - matplotlib>=3.7.1
   - mccabe>=0.7
-  - mypy>=0.991
-  - pre-commit>=2.20
-  - pytorch
-  - pytorch-lightning
-  - zarr
-  - dask-ml
   - mlflow
+  - mypy>=0.991
+  - notebook
+  - pre-commit>=2.20
   - pydocstyle>=6.1
   - pylint>=2.15
   - pyprojroot
   - pytest>=7.2
+  - pytorch
+  - pytorch-lightning
+  - pytorch-cuda
   - rich>=12.6
   - rope>=1.6
   - rstcheck>=6.1
@@ -40,9 +45,21 @@ dependencies:
   - types-setuptools>=65.6
   - types-toml>=0.10
   - xarray>=2023.5.0
+  - zarr
   - pip:
     # development
     - copier>=7.0
     - flake8-pyproject>=1.2
     - sphinx-mdinclude>=0.5
     - torch_geometric
+    - nvidia-cublas-cu11
+    - nvidia-cuda-cupti-cu11
+    - nvidia-cuda-nvrtc-cu11
+    - nvidia-cuda-runtime-cu11
+    - nvidia-cudnn-cu11
+    - nvidia-cufft-cu11
+    - nvidia-curand-cu11
+    - nvidia-cusolver-cu11
+    - nvidia-cusparse-cu11
+    - nvidia-nccl-cu11
+    - nvidia-nvtx-cu11
