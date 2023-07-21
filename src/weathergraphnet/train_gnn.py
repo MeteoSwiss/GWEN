@@ -35,17 +35,17 @@ Arguments:
 """
 
 # Standard library
+import socket
+import warnings
 from typing import List
-from typing import Optional
-from typing import Tuple
-from typing import Union
-
-import matplotlib.pyplot as plt
 
 # Third-party
-import mlflow
+import matplotlib.pyplot as plt  # type: ignore
+import mlflow  # type: ignore
+import numpy as np
 import torch
 import xarray as xr  # type: ignore
+from matplotlib import animation  # type: ignore
 from pyprojroot import here
 from pytorch_lightning.loggers import MLFlowLogger  # type: ignore
 from torch import nn
@@ -111,9 +111,9 @@ class GNNModel(torch.nn.Module):
         return x10
 
 
+# pylint: disable=no-member
 def create_data_loader(data: List, edge_index: torch.Tensor, nodes: int) -> DataLoader:
-    """
-    Create a PyTorch DataLoader object from a list of data samples and an edge index.
+    """Create a PyTorch DataLoader object from a list of data samples and an edge index.
 
     Args:
         data (List): A list of data samples. edge_index (torch.Tensor): The edge index
@@ -128,20 +128,20 @@ def create_data_loader(data: List, edge_index: torch.Tensor, nodes: int) -> Data
             x=torch.tensor(sample, dtype=torch.float32).view(nodes, -1),
             edge_index=edge_index,
         )
-        for sample in data.values
+        for sample in data.values  # type: ignore[attr-defined]
     ]
     return DataLoader(dataset, batch_size=1, shuffle=True)
 
 
 # pylint: disable=too-many-arguments
 def train_model(
-        model: nn.Module,
-        train_loader_in: DataLoader,
-        train_loader_out: DataLoader,
-        criterion_sel: nn.Module,
-        optimizer: optim.Optimizer,
-        num_epochs: int = 10,
-        logger: Optional[MLFlowLogger] = None) -> None:
+    model: nn.Module,
+    train_loader_in: DataLoader,
+    train_loader_out: DataLoader,
+    criterion_sel: nn.Module,
+    optimizer_sel: optim.Optimizer,
+    num_epochs: int = 10,
+) -> None:
     """Train a GNN model and output data using the specified loss function.
 
     Args:
@@ -156,19 +156,18 @@ def train_model(
         None
 
     """
-
-    best_loss = float('inf')
+    best_loss = float("inf")
     # Train the GNN model
     for epoch in range(num_epochs):
         running_loss = 0.0
         for data_in, data_out in zip(train_loader_in, train_loader_out):
             data_in = data_in.to(device)
             data_out = data_out.to(device)
-            optimizer.zero_grad()
+            optimizer_sel.zero_grad()
             outputs = model(data_in)
             loss = criterion_sel(outputs, data_out.x)
             loss.backward()
-            optimizer.step()
+            optimizer_sel.step()
             running_loss += loss.item()
 
         avg_loss = running_loss / len(train_loader_in)
@@ -180,15 +179,15 @@ def train_model(
             mlflow.log_metric("best_loss", best_loss)
 
 
+# type: ignore[return-value]
 def evaluate(
     model: nn.Module,
     loader_in: DataLoader,
     loader_out: DataLoader,
-    criterion: nn.Module,
+    criterion_sel: nn.Module,
     return_predictions: bool = False,
-) -> Union[float, Tuple[float, torch.Tensor]]:
-    """
-    Evaluate the performance of a GNN model on a given dataset.
+) -> tuple[float, list[torch.Tensor]]:
+    """Evaluate the performance of a GNN model on a given dataset.
 
     Args:
         model (torch.nn.Module): The GNN model to evaluate. loader_in
@@ -201,30 +200,46 @@ def evaluate(
         If `return_predictions` is False, returns the evaluation loss. If
         `return_predictions` is True, returns a tuple containing the evaluation loss and
         the model predictions.
-    """
 
+    """
     model.eval()
     with torch.no_grad():
         loss = 0.0
         if return_predictions:
+            y_preds: List[torch.Tensor] = []
+        for data_in, data_out in zip(loader_in, loader_out):
+            data_in = data_in.to(device)
+            data_out = data_out.to(device)
+            outputs = model(data_in)
+            loss += criterion_sel(outputs, data_out.x)
             if return_predictions:
-                y_pred = []
-            for data_in, data_out in zip(loader_in, loader_out):
-                data_in = data_in.to(device)
-                data_out = data_out.to(device)
-                output = model(data_in)
-                loss += criterion(output, data_out).item() * data_in.size(0)
-                if return_predictions:
-                    y_pred.append(output.cpu())
-            loss /= len(loader_in.dataset)
-            if return_predictions:
-                y_pred = torch.cat(y_pred, dim=0)
-                return loss, y_pred
-            else:
-                return loss
+                y_pred.append(outputs.cpu())
+        loss /= len(loader_in)
+        if return_predictions:
+            return loss, y_preds  # type: ignore[return-value]
+        else:
+            return loss  # type: ignore[return-value]
+
+
+def update(frame):
+    """Update the data of the current plot."""
+    if preds == "truth":
+        time_in_seconds = round((y_mem.time[frame] - y_mem.time[0]).item() * 24 * 3600)
+    else:
+        time_in_seconds = y_mem.time[frame] * 10
+    im.set_array(y_mem.isel(time=frame))
+    plt.title(f"Var: Theta_v - Time: {time_in_seconds:.0f} s\n Member: {member}")
+    return im
 
 
 if __name__ == "__main__":
+    # Suppress the warning message
+    warnings.filterwarnings("ignore", message="Setuptools is replacing distutils.")
+    warnings.filterwarnings(
+        "ignore",
+        message="Encountered an unexpected error while inferring pip requirements",
+    )
+
     # Load the data
     data_train = (
         xr.open_zarr(str(here()) + "/data/data_train.zarr").to_array().squeeze()
@@ -233,9 +248,7 @@ if __name__ == "__main__":
     data_train_in = data_train.isel(member=slice(0, 62))
     data_train_out = data_train.isel(member=slice(62, 124))
 
-    data_test = (
-        xr.open_zarr(str(here()) + "/data/data_test.zarr").to_array().squeeze()
-    )
+    data_test = xr.open_zarr(str(here()) + "/data/data_test.zarr").to_array().squeeze()
     data_test = data_test.transpose("time", "member", "height", "ncells")
     data_test_in = data_test.isel(member=slice(0, 62))
     data_test_out = data_test.isel(member=slice(62, 124))
@@ -259,8 +272,9 @@ if __name__ == "__main__":
         optimizer,
         base_lr=0.0001,
         max_lr=0.001,
-        mode='triangular2',
-        cycle_momentum=False)
+        mode="triangular2",
+        cycle_momentum=False,
+    )
     # Create data loaders
     loader_train_in = create_data_loader(data_train_in, edge_index_in, nodes_in)
     loader_train_out = create_data_loader(data_train_out, edge_index_out, nodes_out)
@@ -270,12 +284,29 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    mlflow.set_tracking_uri(str(here()) + "/mlruns")
-    mlflow.set_experiment(experiment_name="WGN")
-    mlflow_logger = MLFlowLogger(experiment_name="WGN")
+    hostname = socket.gethostname()
+    # Set the artifact path based on the hostname
+    if "nid" in hostname:
+        artifact_path = (
+            "/scratch/e1000/meteoswiss/scratch/sadamov/"
+            "pyprojects_data/weathergraphnet/mlruns"
+        )
+        experiment_name = "WGN_balfrin"
+    else:
+        artifact_path = "/scratch/sadamov/pyprojects_data/weathergraphnet/mlruns"
+        experiment_name = "WGN"
 
-    mode = "evaluate"
-    if mode == "train":
+    existing_experiment = mlflow.get_experiment_by_name(experiment_name)
+    if existing_experiment is None:
+        mlflow.create_experiment(name=experiment_name, artifact_location=artifact_path)
+
+    mlflow.set_experiment(experiment_name)
+    mlflow.set_tracking_uri(str(here()) + "/mlruns")
+    mlflow_logger = MLFlowLogger(experiment_name=experiment_name)
+    # Get the hostname of the machine
+
+    retrain = True
+    if retrain:
         # Train the model with MLflow logging
         with mlflow.start_run():
             # Train the model
@@ -285,24 +316,53 @@ if __name__ == "__main__":
                 loader_train_out,
                 criterion.to(device),
                 optimizer,
-                num_epochs=4,
-                logger=mlflow_logger,
+                num_epochs=10,
             )
-    elif mode == "evaluate":
-        # Load the best checkpoint of the model from MLflow
-        y_pred = None
-        with mlflow.start_run():
-            test_loss, y_pred = evaluate(
-                model_gnn, loader_test_in, loader_test_out, criterion,
-                return_predictions=True)
-            print(f"Best model test loss: {test_loss:.4f}")
-            mlflow.log_metric("test_loss", test_loss)
+    # Load the best checkpoint of the model from MLflow
+    y_pred: List[torch.Tensor] = []
+    with mlflow.start_run():
+        test_loss, y_pred = evaluate(
+            model_gnn.to(device),
+            loader_test_in,
+            loader_test_out,
+            criterion.to(device),
+            return_predictions=True,
+        )
+        print(f"Best model test loss: {test_loss:.4f}")
+        mlflow.log_metric("test_loss", test_loss)
 
-# # Plot the predictions
-# fig, ax = plt.subplots()
-# ax.scatter(loader_test_out.dataset.y.numpy(), y_pred.numpy())
-# ax.plot(loader_test_out.dataset.y.numpy(), loader_test_out.dataset.y.numpy(), color="r")
-# ax.set_xlabel("True values")
-# ax.set_ylabel("Predicted values")
-# ax.set_title("Predictions vs. true values")
-# plt.show()
+# Plot the predictions
+# pylint: disable=no-member
+# type: ignore
+y_pred_reshaped = xr.DataArray(
+    torch.cat(y_pred).numpy().reshape((72, 62, 128, 2632)),
+    dims=["time", "member", "height", "ncells"],
+)
+member = 61
+preds = "preds"
+sort_indices = np.argsort(data_test_out.time.values)
+
+# Create a new figure object
+fig, ax = plt.subplots()
+# Plot the first time step of the variable
+if preds == "truth":
+    y_mem = data_test_out.isel(member=member)
+else:
+    y_mem = y_pred_reshaped.isel(member=member)
+
+# Reorder y_mem by the time dimension
+y_mem = y_mem.isel(time=sort_indices)
+# Plot the first time step of the variable
+im = y_mem.isel(time=0).plot(ax=ax)
+plt.gca().invert_yaxis()  # type: ignore # invert the y-axis
+plt.title(f"Theta_v - Time: 0 s\n Member: {member}")
+
+ani = animation.FuncAnimation(
+    fig, update, frames=y_mem.shape[0], interval=100, blit=False
+)
+
+# Define the filename for the output gif
+output_filename = f"{here()}/output/animation_member_{member}_{preds}.gif"
+
+# Save the animation as a gif
+ani.save(output_filename, writer="imagemagick", dpi=100)
