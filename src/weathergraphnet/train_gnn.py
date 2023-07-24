@@ -133,12 +133,25 @@ def create_data_loader(data: List, edge_index: torch.Tensor, nodes: int) -> Data
     return DataLoader(dataset, batch_size=1, shuffle=True)
 
 
+def crps_loss(outputs, target):
+    # Calculate the mean and standard deviation of the predicted distribution
+    mu = torch.mean(outputs, dim=0)
+    sigma = torch.std(outputs, dim=0) + 1e-6  # Ensure that sigma is positive
+
+    # Calculate the CRPS loss for each sample in the batch
+    crps_loss = torch.mean(
+        torch.mean((mu - target) ** 2) / (2 * sigma ** 2) +
+        sigma ** 2 * (1 / 3 - 1 / (2 * (2 * sigma ** 2) ** 0.5))
+    )
+
+    return crps_loss
+
+
 # pylint: disable=too-many-arguments
 def train_model(
     model: nn.Module,
     train_loader_in: DataLoader,
     train_loader_out: DataLoader,
-    criterion_sel: nn.Module,
     optimizer_sel: optim.Optimizer,
     num_epochs: int = 10,
 ) -> None:
@@ -165,7 +178,7 @@ def train_model(
             data_out = data_out.to(device)
             optimizer_sel.zero_grad()
             outputs = model(data_in)
-            loss = criterion_sel(outputs, data_out.x)
+            loss = crps_loss(outputs, data_out.x)
             loss.backward()
             optimizer_sel.step()
             running_loss += loss.item()
@@ -184,7 +197,6 @@ def evaluate(
     model: nn.Module,
     loader_in: DataLoader,
     loader_out: DataLoader,
-    criterion_sel: nn.Module,
     return_predictions: bool = False,
 ) -> tuple[float, list[torch.Tensor]]:
     """Evaluate the performance of a GNN model on a given dataset.
@@ -211,7 +223,7 @@ def evaluate(
             data_in = data_in.to(device)
             data_out = data_out.to(device)
             outputs = model(data_in)
-            loss += criterion_sel(outputs, data_out.x)
+            loss += crps_loss(outputs, data_out.x)
             if return_predictions:
                 y_pred.append(outputs.cpu())
         loss /= len(loader_in)
@@ -245,13 +257,13 @@ if __name__ == "__main__":
         xr.open_zarr(str(here()) + "/data/data_train.zarr").to_array().squeeze()
     )
     data_train = data_train.transpose("time", "member", "height", "ncells")
-    data_train_in = data_train.isel(member=slice(0, 62))
-    data_train_out = data_train.isel(member=slice(62, 124))
+    data_train_in = data_train.isel(member=slice(0, 110))
+    data_train_out = data_train.isel(member=slice(110, 125))
 
     data_test = xr.open_zarr(str(here()) + "/data/data_test.zarr").to_array().squeeze()
     data_test = data_test.transpose("time", "member", "height", "ncells")
-    data_test_in = data_test.isel(member=slice(0, 62))
-    data_test_out = data_test.isel(member=slice(62, 124))
+    data_test_in = data_test.isel(member=slice(0, 110))
+    data_test_out = data_test.isel(member=slice(110, 125))
 
     # Define the Graph Neural Network architecture
     nodes_in = data_train_in.shape[1]
@@ -263,9 +275,6 @@ if __name__ == "__main__":
     edge_index_out = erdos_renyi_graph(nodes_out, edge_prob=1)
 
     model_gnn = GNNModel(channels_in, channels_out)
-
-    # Define the loss function and optimizer
-    criterion = nn.MSELoss()
 
     optimizer = optim.Adam(model_gnn.parameters(), lr=0.0001)
     scheduler = CyclicLR(
@@ -297,10 +306,11 @@ if __name__ == "__main__":
         experiment_name = "WGN"
 
     existing_experiment = mlflow.get_experiment_by_name(experiment_name)
+    print(existing_experiment)
     if existing_experiment is None:
         mlflow.create_experiment(name=experiment_name, artifact_location=artifact_path)
-
-    mlflow.set_experiment(experiment_name)
+    mlflow.set_experiment(experiment_name=experiment_name)
+    print(mlflow.get_experiment_by_name(experiment_name))
     mlflow.set_tracking_uri(str(here()) + "/mlruns")
     mlflow_logger = MLFlowLogger(experiment_name=experiment_name)
     # Get the hostname of the machine
@@ -314,18 +324,22 @@ if __name__ == "__main__":
                 model_gnn.to(device),
                 loader_train_in,
                 loader_train_out,
-                criterion.to(device),
                 optimizer,
                 num_epochs=10,
             )
-    # Load the best checkpoint of the model from MLflow
-    y_pred: List[torch.Tensor] = []
+    else:
+        # Load the best checkpoint of the model from MLflow
+        best_model_path = mlflow_logger.get_best_artifact_path(
+            "model", "test_loss", "min")
+        best_model_state_dict = torch.load(best_model_path)
+        model_gnn.load_state_dict(best_model_state_dict)
+
+    y_pred: List[torch.Tensor] = []pip
     with mlflow.start_run():
         test_loss, y_pred = evaluate(
             model_gnn.to(device),
             loader_test_in,
             loader_test_out,
-            criterion.to(device),
             return_predictions=True,
         )
         print(f"Best model test loss: {test_loss:.4f}")
@@ -335,7 +349,7 @@ if __name__ == "__main__":
 # pylint: disable=no-member
 # type: ignore
 y_pred_reshaped = xr.DataArray(
-    torch.cat(y_pred).numpy().reshape((72, 62, 128, 2632)),
+    torch.cat(y_pred).numpy().reshape((data_test_out.numpy().shape)),
     dims=["time", "member", "height", "ncells"],
 )
 member = 61

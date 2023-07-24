@@ -49,9 +49,10 @@ dependencies:
   - pip:
     # development
     - copier>=7.0
+    - doc8
+    - docutils 
+    - esbonio
     - flake8-pyproject>=1.2
-    - sphinx-mdinclude>=0.5
-    - torch_geometric
     - nvidia-cublas-cu11
     - nvidia-cuda-cupti-cu11
     - nvidia-cuda-nvrtc-cu11
@@ -63,3 +64,6 @@ dependencies:
     - nvidia-cusparse-cu11
     - nvidia-nccl-cu11
     - nvidia-nvtx-cu11
+    - restructuredtext_lint
+    - sphinx-mdinclude>=0.5
+    - torch_geometric
