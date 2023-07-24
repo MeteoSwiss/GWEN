@@ -50,7 +50,7 @@ dependencies:
     # development
     - copier>=7.0
     - doc8
-    - docutils 
+    - docutils
     - esbonio
     - flake8-pyproject>=1.2
     - nvidia-cublas-cu11
