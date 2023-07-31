@@ -12,10 +12,9 @@ import os
 import re
 import socket
 
-import numcodecs  # type: ignore
-
 # Third-party
-import xarray as xr  # type: ignore
+import numcodecs  # type: ignore
+import xarray as xr
 
 hostname = socket.gethostname()
 # Set the artifact path based on the hostname
@@ -76,18 +75,39 @@ for folder in folders:
                 if os.path.exists(zarr_path):
                     # If the Zarr archive exists, open it in "a" (append) mode
                     data.to_zarr(
-                        zarr_path,
-                        consolidated=True,
+                        store=zarr_path,
+                        chunk_store=None,
                         mode="a",
-                        append_dim="member",
+                        synchronizer=None,
+                        group=None,
+                        encoding=None,
+                        compute=True,
+                        consolidated=True,
+                        append_dim=None,
+                        region=None,
+                        safe_chunks=True,
+                        storage_options=None,
+                        zarr_version=None,
+                        chunkmanager_store_kwargs=None,
                         compressor=compressor,
                     )
                 else:
                     # If the Zarr archive does not exist, create it in "w" (write) mode
                     data.to_zarr(
-                        zarr_path,
+                        store=zarr_path,
+                        chunk_store=None,
                         mode="w",
+                        synchronizer=None,
+                        group=None,
+                        encoding=None,
+                        compute=True,
                         consolidated=True,
+                        append_dim=None,
+                        region=None,
+                        safe_chunks=True,
+                        storage_options=None,
+                        zarr_version=None,
+                        chunkmanager_store_kwargs=None,
                         compressor=compressor,
                     )
                 print(f"Loaded {file}", flush=True)

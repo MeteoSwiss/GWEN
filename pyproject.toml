@@ -54,7 +54,7 @@ order_by_type = false
 # Set `multi_line_output = 7` to mark too long lines with `# NOQA` (uppercase!)
 # instead of spreading them over multiple lines. This leaves lines with long
 # trailing comments intact, which may occur if multiple directives are necessary
-# (e.g., `# type: ignore [import]  # pylint: disable=no-name-in-module`).
+# (e.g., ` [import]  # pylint: disable=no-name-in-module`).
 # (Note that thanks to `force_single_line = true`, this should be the main
 # reason for too long lines because multi-import lines are already broken up.)
 multi_line_output = 7 # 7=noqa
@@ -125,6 +125,7 @@ inlinevar-rgx = "^[A-Za-z_][A-Za-z0-9_]*$"
 # Note: To locally ignore certain errors, use "pylint: disable=XXXX" comments instead!
 disable = [
     "C0115", # Missing class docstring
+    "E1101", # Instance of <class> has no <member> member (no-member)
     "C0116", # Missing function or method docstring
     "R0903", # Too few public methods (*/2) (too-few-public-methods)
     # "R0801", # Similar lines in 2 files (duplicate-code)

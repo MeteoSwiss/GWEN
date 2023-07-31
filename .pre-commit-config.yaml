@@ -82,6 +82,7 @@ repos:
         language: system
         entry: pylint
         types: [python]
+        args: [--rcfile=pyproject.toml]
 -   repo: local
     hooks:
     -   id: flake8

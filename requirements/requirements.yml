@@ -9,6 +9,8 @@ dependencies:
   # runtime
   - click>=8.1  # for sample code
   # development
+  - autopep8>=1.5
+  - black>=22.10
   - anaconda-client>=1.11
   - black>=22.10
   - boa>=0.14
@@ -54,6 +56,7 @@ dependencies:
     - docutils
     - esbonio
     - flake8-pyproject>=1.2
+    - matplotlib-stubs>=0.1
     - nvidia-cublas-cu11
     - nvidia-cuda-cupti-cu11
     - nvidia-cuda-nvrtc-cu11

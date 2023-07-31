@@ -1,14 +1,12 @@
 """Import and preprocess the data."""
 
-# pylint: disable=R0801
-
 # Third-party
 import numcodecs  # type: ignore
 import numpy as np
 
 # Third-party import numpy as np
 import xarray as xr
-from pyprojroot import here  # type: ignore
+from pyprojroot import here
 
 
 def split_data(data, test_size=0.3, random_state=42):
@@ -26,7 +24,7 @@ def split_data(data, test_size=0.3, random_state=42):
     # Get the number of samples in the data
     n_samples = len(data.time)
 
-    # Shuffle the indices of the samples # pylint: disable = no-member
+    # Shuffle the indices of the samples
     indices = np.random.RandomState(seed=random_state).permutation(n_samples)
 
     # Calculate the number of samples in the test set
@@ -42,7 +40,8 @@ def split_data(data, test_size=0.3, random_state=42):
 
     return train_data, test_data
 
-def normalize_data(data_train, data_test, method="mean"):
+
+def normalize_data(data_train_raw, data_test_raw, method="mean"):
     """Normalize the training and testing data.
 
     Args:
@@ -54,27 +53,23 @@ def normalize_data(data_train, data_test, method="mean"):
 
     """
     if method == "mean":
-        center = data_train.mean().values
-        scale = data_train.std().values
+        center = data_train_raw.mean().values
+        scale = data_train_raw.std().values
 
     elif method == "median":
-        center = np.nanmedian(data_train)
-        centered_ds = data_train - center
+        center = np.nanmedian(data_train_raw)
+        centered_ds = data_train_raw - center
         scale = np.nanmedian(np.abs(centered_ds))
 
     else:
         raise ValueError("Invalid method. Must be 'mean' or 'median'.")
 
-    data_train_norm = (data_train - center) / scale
-    data_test_norm = (data_test - center) / scale
+    data_train_scaled = (data_train_raw - center) / scale
+    data_test_scaled = (data_test_raw - center) / scale
 
     with open(str(here()) + "/data/scaling.txt", "w", encoding="utf-8") as f:
-        f.write("center: " +
-                str(center) +
-                "\n" +
-                "scale: " +
-                str(scale))
-    return data_train_norm, data_test_norm
+        f.write("center: " + str(center) + "\n" + "scale: " + str(scale))
+    return data_train_scaled, data_test_scaled
 
 
 # Create a compressor using the zlib codec
