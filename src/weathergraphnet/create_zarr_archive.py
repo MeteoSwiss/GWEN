@@ -13,7 +13,7 @@ import re
 import socket
 
 # Third-party
-import numcodecs  # type: ignore
+import numcodecs # type: ignore
 import xarray as xr
 
 hostname = socket.gethostname()
@@ -75,39 +75,18 @@ for folder in folders:
                 if os.path.exists(zarr_path):
                     # If the Zarr archive exists, open it in "a" (append) mode
                     data.to_zarr(
-                        store=zarr_path,
-                        chunk_store=None,
-                        mode="a",
-                        synchronizer=None,
-                        group=None,
-                        encoding=None,
-                        compute=True,
+                        zarr_path,
                         consolidated=True,
-                        append_dim=None,
-                        region=None,
-                        safe_chunks=True,
-                        storage_options=None,
-                        zarr_version=None,
-                        chunkmanager_store_kwargs=None,
+                        mode="a",
+                        append_dim="member",
                         compressor=compressor,
                     )
                 else:
                     # If the Zarr archive does not exist, create it in "w" (write) mode
                     data.to_zarr(
-                        store=zarr_path,
-                        chunk_store=None,
+                        zarr_path,
                         mode="w",
-                        synchronizer=None,
-                        group=None,
-                        encoding=None,
-                        compute=True,
                         consolidated=True,
-                        append_dim=None,
-                        region=None,
-                        safe_chunks=True,
-                        storage_options=None,
-                        zarr_version=None,
-                        chunkmanager_store_kwargs=None,
                         compressor=compressor,
                     )
                 print(f"Loaded {file}", flush=True)
