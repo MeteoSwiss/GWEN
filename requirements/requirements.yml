@@ -39,6 +39,7 @@ dependencies:
   - rich>=12.6
   - rope>=1.6
   - rstcheck>=6.1
+  - ruff
   - sphinx-autobuild>=2021.3
   - sphinx>=4.3
   - toml>=0.10
