@@ -10,12 +10,22 @@ created.
 # Standard library
 import os
 import re
+import socket
+
+import numcodecs  # type: ignore
 
 # Third-party
 import xarray as xr  # type: ignore
 
+hostname = socket.gethostname()
+# Set the artifact path based on the hostname
+if "nid" in hostname:
+    SCRATCH = "/scratch/e1000/meteoswiss/scratch/sadamov/"
+else:
+    SCRATCH = "/scratch/sadamov/"
+
 # Define the path to the directory containing the data files
-data_path = "/scratch/sadamov/icon/icon-nwp/cpu/experiments/"
+data_path = f"{SCRATCH}/icon/icon-nwp/cpu/experiments/"
 
 # Define a regular expression to match the filename of the data files
 filename_regex = r"atmcirc-straka_93_(.*)DOM01_ML_20080801T000000Z.nc"
@@ -24,10 +34,13 @@ filename_regex = r"atmcirc-straka_93_(.*)DOM01_ML_20080801T000000Z.nc"
 filename_pattern = re.compile(filename_regex)
 
 # Define the path to the Zarr archive where the data will be stored
-zarr_path = "/scratch/sadamov/icon/icon-nwp/cpu/experiments/data_combined_2.zarr"
+zarr_path = f"{SCRATCH}/icon/icon-nwp/cpu/experiments/data_combined_2.zarr"
 
 # Get a list of all the folders in the data directory
 folders = os.listdir(data_path)
+
+# Create a compressor using the Zlib codec
+compressor = numcodecs.Zlib(level=1)
 
 # Loop over each folder and load the data files
 for folder in folders:
@@ -56,7 +69,8 @@ for folder in folders:
                         "height": -1,
                         "height_2": -1,
                         "height_3": -1,
-                    }
+                    },
+                    compressor=compressor,
                 )
                 # Check if the Zarr archive already exists
                 if os.path.exists(zarr_path):
@@ -66,6 +80,7 @@ for folder in folders:
                         consolidated=True,
                         mode="a",
                         append_dim="member",
+                        compressor=compressor,
                     )
                 else:
                     # If the Zarr archive does not exist, create it in "w" (write) mode
@@ -73,5 +88,6 @@ for folder in folders:
                         zarr_path,
                         mode="w",
                         consolidated=True,
+                        compressor=compressor,
                     )
                 print(f"Loaded {file}", flush=True)
