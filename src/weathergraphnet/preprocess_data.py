@@ -42,33 +42,61 @@ def split_data(data, test_size=0.3, random_state=42):
 
     return train_data, test_data
 
+def normalize_data(data_train, data_test, method="mean"):
+    """Normalize the training and testing data.
+
+    Args:
+        data_train (xarray.Dataset): The training data to normalize.
+        data_test (xarray.Dataset): The testing data to normalize.
+
+    Returns:
+        The normalized training and testing data.
+
+    """
+    if method == "mean":
+        center = data_train.mean().values
+        scale = data_train.std().values
+
+    elif method == "median":
+        center = np.nanmedian(data_train)
+        centered_ds = data_train - center
+        scale = np.nanmedian(np.abs(centered_ds))
+
+    else:
+        raise ValueError("Invalid method. Must be 'mean' or 'median'.")
+
+    data_train_norm = (data_train - center) / scale
+    data_test_norm = (data_test - center) / scale
+
+    with open(str(here()) + "/data/scaling.txt", "w", encoding="utf-8") as f:
+        f.write("center: " +
+                str(center) +
+                "\n" +
+                "scale: " +
+                str(scale))
+    return data_train_norm, data_test_norm
+
+
+# Create a compressor using the zlib codec
+compressor = numcodecs.Zlib(level=1)
 
 # Data Import
-data_zarr = xr.open_zarr(str(here()) + "/data/data_combined.zarr")
+data_zarr = xr.open_zarr(str(here()) + "/data/data_combined.zarr", consolidated=True)
 data_theta = (
     data_zarr["theta_v"]
     .sel(ncells=slice(2632, None))
     .transpose("time", "member", "height", "ncells")
 )
 
-# Check for missing data print(np.argwhere(np.isnan(data_theta.to_array().to_numpy())))
+# Check for missing data
+# print(np.argwhere(np.isnan(data_theta.to_numpy())))
 # data_theta = data_theta.interpolate_na(dim="x", method="linear",
 # fill_value="extrapolate")
 
 # Split the data into training and testing sets
 data_train, data_test = split_data(data_theta)
 
-center = data_train.mean()
-scale = data_train.std()
-
-with open(str(here()) + "/data/scaling.txt", "w", encoding="utf-8") as f:
-    f.write("center: " + str(center.values) + "\n" + "scale: " + str(scale.values))
-
-data_train_norm = (data_train - center) / scale
-data_test_norm = (data_test - center) / scale
-
-# Create a compressor using the zlib codec
-compressor = numcodecs.Zlib(level=1)
+data_train_norm, data_test_norm = normalize_data(data_train, data_test, "mean")
 
 data_train_norm.chunk(
     chunks={
@@ -80,6 +108,7 @@ data_train_norm.chunk(
 ).to_zarr(
     str(here()) + "/data/data_train.zarr",
     encoding={"theta_v": {"compressor": compressor}},
+    mode="w",
 )
 
 data_test_norm.chunk(
@@ -92,4 +121,5 @@ data_test_norm.chunk(
 ).to_zarr(
     str(here()) + "/data/data_test.zarr",
     encoding={"theta_v": {"compressor": compressor}},
+    mode="w",
 )
