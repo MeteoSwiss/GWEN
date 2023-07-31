@@ -40,21 +40,16 @@ import socket
 import warnings
 from typing import List
 
-import dask
-
 # Third-party
-import matplotlib.pyplot as plt  # type: ignore
 import mlflow  # type: ignore
-import numpy as np
 import torch
 import torch_geometric  # type: ignore
+import utils
 import xarray as xr  # type: ignore
-from matplotlib import animation  # type: ignore
 from pyprojroot import here
 from pytorch_lightning.loggers import MLFlowLogger  # type: ignore
 from torch import nn
 from torch import optim
-from torch.distributions import Normal
 from torch.optim.lr_scheduler import CyclicLR
 from torch.utils.data import BatchSampler
 from torch.utils.data import Sampler
@@ -95,6 +90,32 @@ class GNNModel(torch.nn.Module):
         self.upconv5 = GCNConv(start_channels, out_channels)
         self.pool = TopKPooling(out_channels, ratio=nodes_out / nodes_in)
 
+    def forward(self, data):
+        """Perform a forward pass through the GNN model.
+
+        Args:
+            data (torch_geometric.data.Data): The input data.
+
+        Returns:
+            The output of the GNN model.
+
+        """
+        x, edge_index = (
+            data.x,
+            data.edge_index,
+        )
+        x1 = nn.functional.relu(self.conv1(x, edge_index))
+        x2 = nn.functional.relu(self.conv2(x1, edge_index))
+        x3 = nn.functional.relu(self.conv3(x2, edge_index))
+        x4 = nn.functional.relu(self.conv4(x3, edge_index))
+        x5 = nn.functional.relu(self.conv5(x4, edge_index))
+        x6 = nn.functional.relu(self.upconv1(x5, edge_index) + x4)
+        x7 = nn.functional.relu(self.upconv2(x6, edge_index) + x3)
+        x8 = nn.functional.relu(self.upconv3(x7, edge_index) + x2)
+        x9 = nn.functional.relu(self.upconv4(x8, edge_index) + x1)
+        x10 = nn.functional.relu(self.upconv5(x9, edge_index))
+        return x10
+
     # pylint: disable=too-many-arguments
     def train_model(
         self,
@@ -105,6 +126,7 @@ class GNNModel(torch.nn.Module):
         loss_fn: nn.Module,
         mask=None,
         num_epochs: int = 10,
+        device: str = "cuda",
     ) -> None:
         """Train a GNN model and output data using the specified loss function.
 
@@ -159,6 +181,7 @@ class GNNModel(torch.nn.Module):
         loss_fn: nn.Module,
         mask: torch.Tensor,
         return_predictions: bool = False,
+        device: str = "cuda",
     ) -> tuple[float, list[torch.Tensor]]:
         """Evaluate the performance of the GNN model on a given dataset.
 
@@ -248,6 +271,9 @@ class CustomSampler(Sampler):
         return x, y
 
 
+
+
+
 def create_data_sampler(data, edge_index, nodes, batch_size, num_workers):
     # Convert the data and labels to PyTorch tensors
     dataset = [
@@ -294,116 +320,12 @@ def create_data_sampler(data, edge_index, nodes, batch_size, num_workers):
     return loader
 
 
-class CRPSLoss(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, outputs, target):
-        # Calculate the mean and standard deviation of the predicted distribution
-        mu = torch.mean(outputs, dim=0)  # Mean over ensemble members
-        sigma = torch.std(outputs, dim=0) + 1e-6  # Stddev over ensemble members
-
-        # Create a normal distribution with the predicted mean and standard deviation
-        dist = Normal(mu, sigma)
-
-        # Calculate the CRPS loss for each sample in the batch
-        # Mean over ensemble members and spatial locations
-        crps_loss = torch.mean((dist.cdf(target) - 0.5) ** 2, dim=[1, 2, 3]) #TODO check this!
-
-        return crps_loss
 
 
 
-class EnsembleVarianceRegularizationLoss(nn.Module):
-    def __init__(self, alpha=0.1):
-        super().__init__()
-        self.alpha = alpha  # Regularization strength
-
-    def forward(self, outputs, target):
-        l1_loss = torch.mean(torch.abs(outputs - target))
-        ensemble_variance = torch.var(outputs, dim=1)
-        regularization_loss = -self.alpha * torch.mean(ensemble_variance)
-        return l1_loss + regularization_loss
 
 
-class MaskedLoss(nn.Module):
-    def __init__(self, loss_fn):
-        super().__init__()
-        self.loss_fn = loss_fn
 
-    def forward(self, outputs, target, mask):
-
-        # Calculate the loss for each sample in the batch using the specified loss
-        # function
-        loss = self.loss_fn(outputs, target)
-
-        # Mask the loss for cells where the values stay constant over all observed times
-        masked_loss = loss * mask
-
-        # Calculate the mean loss over all unmasked cells
-        mean_loss = torch.sum(masked_loss) / torch.sum(mask)
-
-        return mean_loss
-
-
-def animate(data, member=0, preds="CNN"):
-    """Animate the prediction evolution."""
-    # Create a new figure object
-    fig, ax = plt.subplots()
-
-    # Calculate the 5% and 95% percentile of the y_mem data
-    vmin, vmax = np.percentile(y_mem.values, [1, 99])
-    # Create a colormap with grey for values outside of the range
-    cmap = plt.cm.RdBu_r
-    cmap.set_bad(color='grey')
-
-    im = y_mem.isel(time=0).plot(ax=ax, cmap=cmap, vmin=vmin, vmax=vmax)
-
-    plt.gca().invert_yaxis()
-
-    text = ax.text(
-        0.5,
-        1.05,
-        "Theta_v - Time: 0 s\n Member: 0 - None",
-        ha='center',
-        va='bottom',
-        transform=ax.transAxes,
-        fontsize=12)
-    plt.tight_layout()
-    ax.set_title("")  # Remove the plt.title
-
-    def update(frame):
-        """Update the data of the current plot."""
-        time_in_seconds = round(
-            (data.time[frame] - data.time[0]).item() * 24 * 3600
-        )
-        im.set_array(data.isel(time=frame))
-        title = f"Var: Theta_v - Time: {time_in_seconds:.0f} s\n Member: {member} - {preds}"
-        text.set_text(title)
-        return im, text
-
-    ani = animation.FuncAnimation(
-        fig, update, frames=range(len(data.time)), interval=50, blit=True
-    )
-    return ani
-
-
-def downscale_data(data, factor):
-    """Downscale the data by the given factor.
-
-    Args:
-        data (xarray.Dataset): The data to downscale.
-        factor (int): The factor by which to downscale the data.
-
-        Returns:
-            The downscaled data.
-
-    """
-    
-    with dask.config.set(**{'array.slicing.split_large_chunks': False}):
-        # Coarsen the height and ncells dimensions by the given factor
-        data_coarse = data.coarsen(height=factor, ncells=factor).mean()
-        return data_coarse
 
 
 if __name__ == "__main__":
@@ -420,13 +342,18 @@ if __name__ == "__main__":
         xr.open_zarr(str(here()) + "/data/data_train.zarr").to_array().squeeze()
     )
     data_train = data_train.transpose("time", "member", "height", "ncells")
-    data_train_in = data_train.isel(member=slice(0, 120))
-    data_train_out = data_train.isel(member=slice(120, 125))
+    # Load the data
+    data_test = (
+        xr.open_zarr(str(here()) + "/data/data_test.zarr").to_array().squeeze()
+    )
+    data_train = data_train.transpose("time", "member", "height", "ncells")
+
+    member_split=100
+    data_train_in, data_train_out = utils.MyDataset(data_train, member_split)
+    data_test_in, data_test_out = utils.MyDataset(data_test, member_split)
 
     data_test = xr.open_zarr(str(here()) + "/data/data_test.zarr").to_array().squeeze()
     data_test = data_test.transpose("time", "member", "height", "ncells")
-    data_test_in = data_test.isel(member=slice(0, 120))
-    data_test_out = data_test.isel(member=slice(120, 125))
 
     # Define the Graph Neural Network architecture
     nodes_in = data_train_in.shape[1]
@@ -458,7 +385,7 @@ if __name__ == "__main__":
         loader_test_out = create_data_loader(
             data_test_out, edge_index_out, nodes_out, batch_size=8)
 
-    loss_fn = EnsembleVarianceRegularizationLoss(alpha=0.1)
+    loss_fn = utils.EnsembleVarianceRegularizationLoss(alpha=0.1)
     model = GNNModel(nodes_in, nodes_out, channels_in, channels_out, 1024)
     optimizer = optim.Adam(model.parameters())
     scheduler = CyclicLR(
@@ -480,7 +407,7 @@ if __name__ == "__main__":
     train_model = model.module.train_model if isinstance(
         model, nn.DataParallel) else model.train_model
     
-    if loss_fn == MaskedLoss:
+    if loss_fn == utils.MaskedLoss:
         # Create a mask that masks all cells that stay constant over all time steps
         variance = data_train.var(dim='time')
         # Create a mask that hides all data with zero variance
@@ -520,7 +447,7 @@ if __name__ == "__main__":
                 loss_fn,
                 mask=None,
                 num_epochs=20,
-		device=device
+                device=device
             )
     else:
 
@@ -581,7 +508,7 @@ else:
 
 y_mem = y_mem.sortby(y_mem.time, ascending=True)
 
-ani = animate(y_mem, member=member, preds=preds)
+ani = utils.animate(y_mem, member=member, preds=preds)
 
 # Define the filename for the output gif
 output_filename = f"{here()}/output/animation_member_{member}_{preds}.gif"
