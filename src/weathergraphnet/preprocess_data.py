@@ -1,24 +1,37 @@
-"""Import and preprocess the data."""
+"""Functions to import and preprocess weather data.
+
+Functions:
+- split_data(data: xr.Dataset, test_size: float = 0.3, random_state: int = 42) ->
+    Tuple[xr.Dataset, xr.Dataset]: Splits the data into training and testing sets.
+- normalize_data(data_train_raw: xr.Dataset, data_test_raw: xr.Dataset,
+    method: str = "mean") -> Tuple[xr.Dataset, xr.Dataset]:
+    Normalizes the training and testing data.
+"""
+
+# Standard library
+from typing import Tuple
 
 # Third-party
 import numcodecs  # type: ignore
 import numpy as np
-
-# Third-party import numpy as np
 import xarray as xr
 from pyprojroot import here
 
 
-def split_data(data, test_size=0.3, random_state=42):
+def split_data(
+    data: xr.Dataset, test_size: float = 0.3, random_state: int = 42
+) -> Tuple[xr.Dataset, xr.Dataset]:
     """Split the data into training and testing sets.
 
     Args:
-        data (xarray.Dataset): The data to split. test_size (float): The proportion of
-        the data to use for testing. random_state (int): The random seed to use for
-        splitting.
+        data (xr.Dataset): The data to split.
+        test_size (float, optional): The proportion of the data to use for testing.
+            Defaults to 0.3.
+        random_state (int, optional): The random seed used for splitting. Default is 42.
 
     Returns:
-        Two xarray.Datasets containing the training and testing data.
+        Tuple[xr.Dataset, xr.Dataset]: Two xarray.Datasets containing the training and
+        testing data.
 
     """
     # Get the number of samples in the data
@@ -41,20 +54,27 @@ def split_data(data, test_size=0.3, random_state=42):
     return train_data, test_data
 
 
-def normalize_data(data_train_raw, data_test_raw, method="mean"):
+def normalize_data(
+    data_train_raw: xr.Dataset, data_test_raw: xr.Dataset, method: str = "mean"
+) -> Tuple[xr.Dataset, xr.Dataset]:
     """Normalize the training and testing data.
 
     Args:
-        data_train (xarray.Dataset): The training data to normalize.
-        data_test (xarray.Dataset): The testing data to normalize.
+        data_train_raw (xr.Dataset): The training data to normalize. data_test_raw
+        (xr.Dataset): The testing data to normalize.
+        method (str, optional): The normalization method to use.
+            Must be 'mean' or 'median'. Defaults to "mean".
+
+    Raises:
+        ValueError: If an invalid normalization method is provided.
 
     Returns:
-        The normalized training and testing data.
+        Tuple[xr.Dataset, xr.Dataset]: The normalized training and testing data.
 
     """
     if method == "mean":
-        center = data_train_raw.mean().values
-        scale = data_train_raw.std().values
+        center: np.floating = np.array(data_train_raw.mean().values)[0]
+        scale: np.floating = np.array(data_train_raw.std().values)[0]
 
     elif method == "median":
         center = np.nanmedian(data_train_raw)
@@ -83,16 +103,17 @@ data_theta = (
     .transpose("time", "member", "height", "ncells")
 )
 
-# Check for missing data
-# print(np.argwhere(np.isnan(data_theta.to_numpy())))
-# data_theta = data_theta.interpolate_na(dim="x", method="linear",
-# fill_value="extrapolate")
+# Check for missing data print(np.argwhere(np.isnan(data_theta.to_numpy()))) data_theta
+# = data_theta.interpolate_na(dim="x", method="linear", fill_value="extrapolate")
+
 
 # Split the data into training and testing sets
 data_train, data_test = split_data(data_theta)
 
+# Normalize the training and testing data
 data_train_norm, data_test_norm = normalize_data(data_train, data_test, "mean")
 
+# Chunk and compress the normalized data and save to zarr files
 data_train_norm.chunk(
     chunks={
         "time": 32,

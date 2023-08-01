@@ -1,7 +1,12 @@
+"""Test the create_gif module."""
+# Standard library
 import os
 
+# Third-party
 import pytest
 import xarray as xr
+
+# First-party
 from weathergraphnet.create_gif import create_animation
 
 
@@ -15,6 +20,7 @@ def var_name():
     return "theta_v"
 
 
+# pylint: disable=redefined-outer-name
 def test_create_animation(input_file, var_name):
     """Test the create_animation function."""
     create_animation(input_file, var_name)

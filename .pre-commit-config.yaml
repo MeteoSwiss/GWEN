@@ -103,3 +103,4 @@ repos:
         verbose: true
         types: [python]
         files: ^(src|tests)/
+        args: [--mypy-path=/users/sadamov/pyprojects/weathergraphnet/out/]

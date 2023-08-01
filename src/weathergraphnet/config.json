@@ -9,5 +9,6 @@
     "mask_threshold": 1e-6,
     "lr": 0.001,
     "epochs": 10,
-    "seed": 42
+    "seed": 42,
+    "retrain": true
 }

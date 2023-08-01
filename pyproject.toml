@@ -76,6 +76,7 @@ known_first_party = [
 ]
 
 [tool.mypy]
+mypy_path = "/users/sadamov/pyprojects/weathergraphnet/out/"
 
 [[tool.mypy.overrides]]
 # Note: Only globally ignore missing imports as a matter of last resort!
