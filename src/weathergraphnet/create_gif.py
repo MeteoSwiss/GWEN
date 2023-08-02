@@ -25,6 +25,11 @@ from matplotlib.figure import Figure
 from matplotlib.image import AxesImage
 from pyprojroot import here
 
+# First-party
+from weathergraphnet.utils import setup_logger
+
+logger = setup_logger()
+
 
 def get_member_parts(nc_file: str) -> Tuple[str, ...]:
     """Extract the relevant parts of the filename.
@@ -41,10 +46,9 @@ def get_member_parts(nc_file: str) -> Tuple[str, ...]:
     """
     try:
         filename_parts = os.path.splitext(os.path.basename(nc_file))[0].split("_")
-        return tuple(filename_parts[2:5])
     except IndexError:
         print("Error in getting member parts, check your file!")
-        sys.exit(1)
+    return tuple(filename_parts[2:5])
 
 
 def get_var_min_max(var: xr.DataArray) -> Tuple[float, float]:
@@ -59,11 +63,7 @@ def get_var_min_max(var: xr.DataArray) -> Tuple[float, float]:
         the variable.
 
     """
-    try:
-        return float(var.min()), float(var.max())
-    except IndexError:
-        print("Error in getting min and max of variable!")
-        sys.exit(1)
+    return float(var.min()), float(var.max())
 
 
 def create_animation(input_file: str, var_name: str) -> None:
@@ -124,8 +124,8 @@ def open_input_file(input_file: str) -> xr.Dataset:
                 "Invalid file format. Please input either .nc or .zarr file"
             )
     except (FileNotFoundError, ValueError) as error:
-        print(f"Error in opening the file: {error}")
-        sys.exit(1)
+        logger.error("Error in opening the file: %s", error)
+
     return ds
 
 
@@ -140,12 +140,15 @@ def select_variable(ds: xr.Dataset, var_name: str, member: str) -> xr.DataArray:
     Returns:
         xr.DataArray: The selected variable.
 
+    Raises:
+        KeyError: If the variable is not found in the dataset.
+
     """
     try:
         var = ds[var_name].sel(member=member)
     except KeyError:
-        print(f"Error: Variable {var_name} not found in the dataset")
-
+        logger.error("Variable %s not found in the dataset", var_name)
+        raise
     return var
 
 
@@ -248,7 +251,7 @@ def save_animation(ani: animation.FuncAnimation, var_name: str, member: str) -> 
     try:
         ani.save(output_filename, writer="imagemagick", dpi=100)
     except RuntimeError as error:
-        print(f"Error in saving output file: {error}")
+        logger.error("Error in saving output file: %s", error)
 
 
 def main(input_file: str, var_name: str) -> None:
@@ -264,11 +267,35 @@ def main(input_file: str, var_name: str) -> None:
     try:
         os.makedirs(output_dir, exist_ok=True)
     except FileExistsError as error:
-        print(f"Error in creating output directory: {error}")
-        sys.exit(1)
+        logger.error("Error in creating output directory: %s", error)
 
-    # Create the animation
-    create_animation(input_file, var_name)
+    # Open the dataset
+    try:
+        ds = xr.open_dataset(input_file)
+    except ValueError as error:
+        logger.error("Error in opening the file: %s", error)
+
+    # Select the variable
+    try:
+        member = get_member_name(input_file)
+        var = select_variable(ds, var_name, member)
+    except KeyError as error:
+        logger.error("Error in selecting the variable: %s", error)
+
+    # Create the figure and plot the first time step
+    fig, ax = plt.subplots()
+    im = plot_first_time_step(var, ax)
+
+    # Create the update function and animation object
+    update_func = create_update_function(im, var, member, var_name)
+    num_frames = len(var.time)
+    ani = create_animation_object(fig, update_func, num_frames)
+
+    # Save the animation
+    try:
+        save_animation(ani, var_name, member)
+    except RuntimeError as error:
+        logger.error("Error in saving the animation: %s", error)
 
 
 if __name__ == "__main__":
@@ -293,7 +320,7 @@ if __name__ == "__main__":
             try:
                 main(input_file, var_name)
             except FileNotFoundError as e:
-                print(f"Error: {e}. Please check the input file path.")
+                logger.error("Error: %s. Please check the input file path.", e)
 
     else:
         in_file = (

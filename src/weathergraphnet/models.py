@@ -1,12 +1,20 @@
+"""Contains the models used for weather prediction."""
+# Standard library
 from typing import List
 from typing import Tuple
 
+# Third-party
 import mlflow  # type: ignore
 import torch
 from torch import nn
 from torch_geometric.data import Data  # type: ignore
 from torch_geometric.nn import GCNConv  # type: ignore
 from torch_geometric.nn import TopKPooling  # type: ignore
+
+# First-party
+from weathergraphnet.utils import setup_logger
+
+logger = setup_logger()
 
 
 class BaseNet(nn.Module):
@@ -27,6 +35,10 @@ class BaseNet(nn.Module):
         self.channels_out = channels_out
         self.hidden_size = hidden_size
 
+    def forward(self, x):
+        """Forward pass through the network."""
+        raise NotImplementedError
+
 
 class Encoder(BaseNet):
     """Encoder network."""
@@ -41,31 +53,37 @@ class Encoder(BaseNet):
 
         """
         super().__init__(channels_in, channels_out, hidden_size)
-        self.conv_layers = nn.Sequential(
-            nn.Conv2d(channels_in, self.hidden_size //
-                      8, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(
-                self.hidden_size // 8, self.hidden_size // 4, kernel_size=3, padding=1
-            ),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(
-                self.hidden_size // 4, self.hidden_size // 2, kernel_size=3, padding=1
-            ),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(
-                self.hidden_size // 2, self.hidden_size, kernel_size=3, padding=1
-            ),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(self.hidden_size, self.hidden_size,
-                      kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(self.hidden_size, self.hidden_size,
-                      kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-        )
+        try:
+            self.conv_layers = nn.Sequential(
+                nn.Conv2d(channels_in, self.hidden_size // 8, kernel_size=3, padding=1),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(
+                    self.hidden_size // 8,
+                    self.hidden_size // 4,
+                    kernel_size=3,
+                    padding=1,
+                ),
+                nn.ReLU(inplace=True),
+                nn.MaxPool2d(kernel_size=2, stride=2),
+                nn.Conv2d(
+                    self.hidden_size // 4,
+                    self.hidden_size // 2,
+                    kernel_size=3,
+                    padding=1,
+                ),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(
+                    self.hidden_size // 2, self.hidden_size, kernel_size=3, padding=1
+                ),
+                nn.ReLU(inplace=True),
+                nn.MaxPool2d(kernel_size=2, stride=2),
+                nn.Conv2d(self.hidden_size, self.hidden_size, kernel_size=3, padding=1),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(self.hidden_size, self.hidden_size, kernel_size=3, padding=1),
+                nn.ReLU(inplace=True),
+            )
+        except ValueError as e:
+            logger.error("Error occurred while initializing the Encoder class: %s", e)
 
     def forward(
         self, x: torch.Tensor
@@ -80,14 +98,21 @@ class Encoder(BaseNet):
             output tensors.
 
         """
-        x1 = self.conv_layers[0](x)
-        x1 = self.activation(x1)
-        x2 = self.conv_layers[2](self.conv_layers[1](x1))
-        x2 = self.activation(x2)
-        x3 = self.conv_layers[4](self.conv_layers[3](x2))
-        x3 = self.activation(x3)
-        x4 = self.conv_layers[7](self.conv_layers[6](self.conv_layers[5](x3)))
-        x4 = self.activation(x4)
+        try:
+            x1 = self.conv_layers[0](x)
+            x1 = self.activation(x1)
+            x2 = self.conv_layers[2](self.conv_layers[1](x1))
+            x2 = self.activation(x2)
+            x3 = self.conv_layers[4](self.conv_layers[3](x2))
+            x3 = self.activation(x3)
+            x4 = self.conv_layers[7](self.conv_layers[6](self.conv_layers[5](x3)))
+            x4 = self.activation(x4)
+        except IndexError as e:
+            logger.error(
+                "Error occurred while performing forward"
+                " pass through the encoder network: %s",
+                e,
+            )
         return x1, x2, x3, x4
 
 
@@ -104,42 +129,47 @@ class Decoder(BaseNet):
 
         """
         super().__init__(channels_in, channels_out, hidden_size)
-        self.conv_layers = nn.ModuleList(
-            [
-                nn.ConvTranspose2d(
-                    self.hidden_size, self.hidden_size // 2, kernel_size=2, stride=2
-                ),
-                nn.Conv2d(
-                    self.hidden_size, self.hidden_size // 2, kernel_size=3, padding=1
-                ),
-                nn.ConvTranspose2d(
-                    self.hidden_size // 2,
-                    self.hidden_size // 4,
-                    kernel_size=2,
-                    stride=2,
-                ),
-                nn.Conv2d(
-                    self.hidden_size // 2,
-                    self.hidden_size // 4,
-                    kernel_size=3,
-                    padding=1,
-                ),
-                nn.ConvTranspose2d(
-                    self.hidden_size // 4,
-                    self.hidden_size // 8,
-                    kernel_size=2,
-                    stride=2,
-                ),
-                nn.Conv2d(
-                    self.hidden_size // 4,
-                    self.hidden_size // 8,
-                    kernel_size=3,
-                    padding=1,
-                ),
-                nn.Conv2d(self.hidden_size // 8,
-                          self.channels_out, kernel_size=1),
-            ]
-        )
+        try:
+            self.conv_layers = nn.ModuleList(
+                [
+                    nn.ConvTranspose2d(
+                        self.hidden_size, self.hidden_size // 2, kernel_size=2, stride=2
+                    ),
+                    nn.Conv2d(
+                        self.hidden_size,
+                        self.hidden_size // 2,
+                        kernel_size=3,
+                        padding=1,
+                    ),
+                    nn.ConvTranspose2d(
+                        self.hidden_size // 2,
+                        self.hidden_size // 4,
+                        kernel_size=2,
+                        stride=2,
+                    ),
+                    nn.Conv2d(
+                        self.hidden_size // 2,
+                        self.hidden_size // 4,
+                        kernel_size=3,
+                        padding=1,
+                    ),
+                    nn.ConvTranspose2d(
+                        self.hidden_size // 4,
+                        self.hidden_size // 8,
+                        kernel_size=2,
+                        stride=2,
+                    ),
+                    nn.Conv2d(
+                        self.hidden_size // 4,
+                        self.hidden_size // 8,
+                        kernel_size=3,
+                        padding=1,
+                    ),
+                    nn.Conv2d(self.hidden_size // 8, self.channels_out, kernel_size=1),
+                ]
+            )
+        except ValueError as e:
+            logger.error("Error occurred while initializing the Decoder class: %s", e)
 
     def crop(
         self, encoder_layer: torch.Tensor, decoder_layer: torch.Tensor
@@ -154,18 +184,21 @@ class Decoder(BaseNet):
             torch.Tensor: Cropped tensor.
 
         """
-        diff_y = encoder_layer.size()[2] - decoder_layer.size()[2]
-        diff_x = encoder_layer.size()[3] - decoder_layer.size()[3]
-        encoder_layer = encoder_layer[
-            :,
-            :,
-            diff_y // 2: encoder_layer.size()[2] - diff_y // 2,
-            diff_x // 2: encoder_layer.size()[3] - diff_x // 2,
-        ]
-        if diff_x % 2 == 1:
-            encoder_layer = encoder_layer[:, :, :, 1: encoder_layer.size()[3]]
-        if diff_y % 2 == 1:
-            encoder_layer = encoder_layer[:, :, 1: encoder_layer.size()[2], :]
+        try:
+            diff_y = encoder_layer.size()[2] - decoder_layer.size()[2]
+            diff_x = encoder_layer.size()[3] - decoder_layer.size()[3]
+            encoder_layer = encoder_layer[
+                :,
+                :,
+                diff_y // 2 : encoder_layer.size()[2] - diff_y // 2,
+                diff_x // 2 : encoder_layer.size()[3] - diff_x // 2,
+            ]
+            if diff_x % 2 == 1:
+                encoder_layer = encoder_layer[:, :, :, 1 : encoder_layer.size()[3]]
+            if diff_y % 2 == 1:
+                encoder_layer = encoder_layer[:, :, 1 : encoder_layer.size()[2], :]
+        except IndexError as e:
+            logger.error("Error occurred while cropping the encoder layer: %s", e)
         return encoder_layer
 
     def forward(
@@ -183,29 +216,34 @@ class Decoder(BaseNet):
         """
         x1, x2, x3, x4 = x
         cropped = 0
-        y1 = self.conv_layers[0](x4)
-        y1 = self.activation(y1)
-        if y1.shape != x3.shape:
-            x3 = self.crop(x3, y1)
-            cropped += 1
-        y1 = self.conv_layers[1](torch.cat([x3, y1], dim=1))
-        y1 = self.activation(y1)
-        y2 = self.conv_layers[2](y1)
-        y2 = self.activation(y2)
-        if y2.shape != x2.shape:
-            x2 = self.crop(x2, y2)
-            cropped += 1
-        y2 = self.conv_layers[3](torch.cat([x2, y2], dim=1))
-        y2 = self.activation(y2)
-        y3 = self.conv_layers[4](y2)
-        y3 = self.activation(y3)
-        if y3.shape != x1.shape:
-            x1 = self.crop(x1, y3)
-            cropped += 1
-        y3 = self.conv_layers[5](torch.cat([x1, y3], dim=1))
-        y3 = self.activation(y3)
-        out = self.conv_layers[6](y3)
-        out = nn.functional.pad(out, (cropped, 0, 0, 0), mode="replicate")
+        try:
+            y1 = self.conv_layers[0](x4)
+            y1 = self.activation(y1)
+            if y1.shape != x3.shape:
+                x3 = self.crop(x3, y1)
+                cropped += 1
+            y1 = self.conv_layers[1](torch.cat([x3, y1], dim=1))
+            y1 = self.activation(y1)
+            y2 = self.conv_layers[2](y1)
+            y2 = self.activation(y2)
+            if y2.shape != x2.shape:
+                x2 = self.crop(x2, y2)
+                cropped += 1
+            y2 = self.conv_layers[3](torch.cat([x2, y2], dim=1))
+            y2 = self.activation(y2)
+            y3 = self.conv_layers[4](y2)
+            y3 = self.activation(y3)
+            if y3.shape != x1.shape:
+                x1 = self.crop(x1, y3)
+                cropped += 1
+            y3 = self.conv_layers[5](torch.cat([x1, y3], dim=1))
+            y3 = self.activation(y3)
+            out = self.conv_layers[6](y3)
+            out = nn.functional.pad(out, (cropped, 0, 0, 0), mode="replicate")
+        except ValueError as e:
+            logger.error(
+                "Error occurred during the forward pass of the CNN model: %s", e
+            )
         return out
 
 
@@ -226,8 +264,11 @@ class UNet(BaseNet):
     def __init__(self, channels_in: int, channels_out: int, hidden_size: int) -> None:
         """Initialize the UNet network."""
         super().__init__(channels_in, channels_out, hidden_size)
-        self.encoder = Encoder(channels_in, channels_out, hidden_size)
-        self.decoder = Decoder(channels_in, channels_out, hidden_size)
+        try:
+            self.encoder = Encoder(channels_in, channels_out, hidden_size)
+            self.decoder = Decoder(channels_in, channels_out, hidden_size)
+        except RuntimeError as e:
+            logger.error("Error occurred while initializing UNet network: %s", str(e))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass through the UNet network.
@@ -239,43 +280,51 @@ class UNet(BaseNet):
         - out (torch.Tensor): The output tensor.
 
         """
-        x1, x2, x3, x4 = self.encoder(x)
-        out = self.decoder((x1, x2, x3, x4))
+        try:
+            x1, x2, x3, x4 = self.encoder(x)
+            out = self.decoder((x1, x2, x3, x4))
+        except RuntimeError as e:
+            logger.error(
+                "Error occurred during forward pass through UNet network: %s", str(e)
+            )
         return out
 
     def train_with_configs(self, configs: dict) -> None:
         """Train the model.
 
         Args:
-        - configs (Any): The configuration object.
+        configs (Any): The configuration object.
+
+        Returns:
+        None
 
         """
-        for epoch in range(configs["num_epochs"]):
-            running_loss = 0.0
-            for input_data, target_data in configs["loader_train"]:
-                input_data = input_data.to(configs["device"])
-                target_data = target_data.to(configs["device"])
-                configs["optimizer"].zero_grad()
-                output = self(input_data)
-                if configs["mask"] is not None:
-                    loss = configs["loss_fn"](
-                        output, target_data, configs["mask"].to(
-                            configs["device"])
-                    )
-                else:
-                    loss = configs["loss_fn"](output, target_data)
-                loss.backward()
-                configs["optimizer"].step()
-                if configs["scheduler"] is not None:
-                    configs["scheduler"].step()  # update the learning rate
-                running_loss += loss.item()
-            avg_loss = running_loss / len(configs["dataloader"])
-            print(f"Epoch {epoch + 1}: {avg_loss}")
-            mlflow.log_metric("loss", avg_loss)
+        try:
+            for epoch in range(configs["num_epochs"]):
+                running_loss = 0.0
+                for input_data, target_data in configs["loader_train"]:
+                    input_data = input_data.to(configs["device"])
+                    target_data = target_data.to(configs["device"])
+                    configs["optimizer"].zero_grad()
+                    output = self(input_data)
+                    if configs["mask"] is not None:
+                        loss = configs["loss_fn"](
+                            output, target_data, configs["mask"].to(configs["device"])
+                        )
+                    else:
+                        loss = configs["loss_fn"](output, target_data)
+                    loss.backward()
+                    configs["optimizer"].step()
+                    if configs["scheduler"] is not None:
+                        configs["scheduler"].step()  # update the learning rate
+                    running_loss += loss.item()
+                avg_loss = running_loss / len(configs["dataloader"])
+                print(f"Epoch {epoch + 1}: {avg_loss}")
+                mlflow.log_metric("loss", avg_loss)
+        except RuntimeError as e:
+            logger.error("Error occurred while training UNet network: %s", str(e))
 
-    def eval_with_configs(
-        self, configs: dict
-    ) -> Tuple[float, List[torch.Tensor]]:
+    def eval_with_configs(self, configs: dict) -> Tuple[float, List[torch.Tensor]]:
         """Evaluate the model.
 
         Args:
@@ -285,24 +334,26 @@ class UNet(BaseNet):
         - loss (float): The loss achieved during evaluation.
 
         """
-        self.eval()
-        with torch.no_grad():
-            loss: float = 0.0
-            y_preds: List[torch.Tensor] = []
-            for input_data, target_data in configs["dataloader"]:
-                input_data = input_data.to(configs["device"])
-                target_data = target_data.to(configs["device"])
-                output = self(input_data)
-                if configs["mask"] is not None:
-                    loss += configs["loss_fn"](
-                        output, target_data, configs["mask"].to(
-                            configs["device"])
-                    )
-                else:
-                    loss += configs["loss_fn"](output, target_data)
-                y_preds.append(output.cpu())
-            loss /= len(configs["dataloader"])
-            return loss, y_preds
+        try:
+            self.eval()
+            with torch.no_grad():
+                loss: float = 0.0
+                y_preds: List[torch.Tensor] = []
+                for input_data, target_data in configs["dataloader"]:
+                    input_data = input_data.to(configs["device"])
+                    target_data = target_data.to(configs["device"])
+                    output = self(input_data)
+                    if configs["mask"] is not None:
+                        loss += configs["loss_fn"](
+                            output, target_data, configs["mask"].to(configs["device"])
+                        )
+                    else:
+                        loss += configs["loss_fn"](output, target_data)
+                    y_preds.append(output.cpu())
+                loss /= len(configs["dataloader"])
+        except RuntimeError as e:
+            logger.error("Error occurred while evaluating UNet network: %s", str(e))
+        return loss, y_preds
 
 
 class DownConvLayers(torch.nn.Module):
@@ -316,20 +367,25 @@ class DownConvLayers(torch.nn.Module):
 
         """
         super().__init__()
-        self.conv1 = GCNConv(
-            gnn_configs["in_channels"], gnn_configs["hidden_feats"])
-        self.conv2 = GCNConv(
-            gnn_configs["hidden_feats"], gnn_configs["hidden_feats"] // 2
-        )
-        self.conv3 = GCNConv(
-            gnn_configs["hidden_feats"] // 2, gnn_configs["hidden_feats"] // 4
-        )
-        self.conv4 = GCNConv(
-            gnn_configs["hidden_feats"] // 4, gnn_configs["hidden_feats"] // 8
-        )
-        self.conv5 = GCNConv(
-            gnn_configs["hidden_feats"] // 8, gnn_configs["hidden_feats"] // 16
-        )
+        try:
+            self.conv1 = GCNConv(
+                gnn_configs["in_channels"], gnn_configs["hidden_feats"]
+            )
+            self.conv2 = GCNConv(
+                gnn_configs["hidden_feats"], gnn_configs["hidden_feats"] // 2
+            )
+            self.conv3 = GCNConv(
+                gnn_configs["hidden_feats"] // 2, gnn_configs["hidden_feats"] // 4
+            )
+            self.conv4 = GCNConv(
+                gnn_configs["hidden_feats"] // 4, gnn_configs["hidden_feats"] // 8
+            )
+            self.conv5 = GCNConv(
+                gnn_configs["hidden_feats"] // 8, gnn_configs["hidden_feats"] // 16
+            )
+        except KeyError as e:
+            logger.error("Error occurred while initializing DownConvLayers: %s", e)
+            raise
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
         """Perform a forward pass through the down-convolutional layers of the GNN.
@@ -342,11 +398,17 @@ class DownConvLayers(torch.nn.Module):
             torch.Tensor: The output tensor.
 
         """
-        x = torch.relu(self.conv1(x, edge_index))
-        x = torch.relu(self.conv2(x, edge_index))
-        x = torch.relu(self.conv3(x, edge_index))
-        x = torch.relu(self.conv4(x, edge_index))
-        x = torch.relu(self.conv5(x, edge_index))
+        try:
+            x = torch.relu(self.conv1(x, edge_index))
+            x = torch.relu(self.conv2(x, edge_index))
+            x = torch.relu(self.conv3(x, edge_index))
+            x = torch.relu(self.conv4(x, edge_index))
+            x = torch.relu(self.conv5(x, edge_index))
+        except Exception as e:
+            logger.error(
+                "Error occurred while performing forward pass in DownConvLayers: %s", e
+            )
+            raise
         return x
 
 
@@ -361,20 +423,25 @@ class UpConvLayers(torch.nn.Module):
 
         """
         super().__init__()
-        self.upconv1 = GCNConv(
-            gnn_configs["hidden_feats"] // 16, gnn_configs["hidden_feats"] // 8
-        )
-        self.upconv2 = GCNConv(
-            gnn_configs["hidden_feats"] // 8, gnn_configs["hidden_feats"] // 4
-        )
-        self.upconv3 = GCNConv(
-            gnn_configs["hidden_feats"] // 4, gnn_configs["hidden_feats"] // 2
-        )
-        self.upconv4 = GCNConv(
-            gnn_configs["hidden_feats"] // 2, gnn_configs["hidden_feats"]
-        )
-        self.upconv5 = GCNConv(
-            gnn_configs["hidden_feats"], gnn_configs["out_channels"])
+        try:
+            self.upconv1 = GCNConv(
+                gnn_configs["hidden_feats"] // 16, gnn_configs["hidden_feats"] // 8
+            )
+            self.upconv2 = GCNConv(
+                gnn_configs["hidden_feats"] // 8, gnn_configs["hidden_feats"] // 4
+            )
+            self.upconv3 = GCNConv(
+                gnn_configs["hidden_feats"] // 4, gnn_configs["hidden_feats"] // 2
+            )
+            self.upconv4 = GCNConv(
+                gnn_configs["hidden_feats"] // 2, gnn_configs["hidden_feats"]
+            )
+            self.upconv5 = GCNConv(
+                gnn_configs["hidden_feats"], gnn_configs["out_channels"]
+            )
+        except KeyError as e:
+            logger.error("Error occurred while initializing UpConvLayers: %s", e)
+            raise
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
         """Perform a forward pass through the up-convolutional layers of the GNN model.
@@ -387,11 +454,17 @@ class UpConvLayers(torch.nn.Module):
             torch.Tensor: The output tensor.
 
         """
-        x = torch.relu(self.upconv1(x, edge_index))
-        x = torch.relu(self.upconv2(x, edge_index))
-        x = torch.relu(self.upconv3(x, edge_index))
-        x = torch.relu(self.upconv4(x, edge_index))
-        x = self.upconv5(x, edge_index)
+        try:
+            x = torch.relu(self.upconv1(x, edge_index))
+            x = torch.relu(self.upconv2(x, edge_index))
+            x = torch.relu(self.upconv3(x, edge_index))
+            x = torch.relu(self.upconv4(x, edge_index))
+            x = self.upconv5(x, edge_index)
+        except Exception as e:
+            logger.error(
+                "Error occurred while performing forward pass in UpConvLayers: %s", e
+            )
+            raise
         return x
 
 
@@ -414,8 +487,12 @@ class GCNConvLayers(torch.nn.Module):
 
         """
         super().__init__()
-        self.down_conv_layers = DownConvLayers(gnn_configs)
-        self.up_conv_layers = UpConvLayers(gnn_configs)
+        try:
+            self.down_conv_layers = DownConvLayers(gnn_configs)
+            self.up_conv_layers = UpConvLayers(gnn_configs)
+        except (TypeError, ValueError) as e:
+            logger.error("Error initializing GCNConvLayers: %s", e)
+            raise
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
         """Perform a forward pass through the GNN model.
@@ -428,8 +505,12 @@ class GCNConvLayers(torch.nn.Module):
             torch.Tensor: The output tensor.
 
         """
-        x = self.down_conv_layers(x, edge_index)
-        x = self.up_conv_layers(x, edge_index)
+        try:
+            x = self.down_conv_layers(x, edge_index)
+            x = self.up_conv_layers(x, edge_index)
+        except (TypeError, ValueError) as e:
+            logger.error("Error in GCNConvLayers forward method: %s", e)
+            raise
         return x
 
 
@@ -452,10 +533,13 @@ class TopKPoolingLayer(torch.nn.Module):
 
         """
         super().__init__()
-        self.pool = TopKPooling(
-            gnn_configs["out_channels"],
-            ratio=gnn_configs["nodes_out"] / gnn_configs["nodes_in"],
-        )
+        try:
+            self.pool = TopKPooling(
+                gnn_configs["out_channels"],
+                ratio=gnn_configs["nodes_out"] / gnn_configs["nodes_in"],
+            )
+        except (TypeError, ValueError) as e:
+            logger.error("Error initializing TopKPoolingLayer: %s", e)
 
     def forward(
         self, x: torch.Tensor, edge_index: torch.Tensor
@@ -470,7 +554,11 @@ class TopKPoolingLayer(torch.nn.Module):
             torch.Tensor: The output tensor.
 
         """
-        x, edge_index, _, _, _, _ = self.pool(x, edge_index)
+        try:
+            x, edge_index, _, _, _, _ = self.pool(x, edge_index)
+        except RuntimeError as e:
+            logger.error("Error in TopKPoolingLayer forward method: %s", e)
+            raise
         return x, edge_index
 
 
@@ -540,12 +628,19 @@ class GNNModel(torch.nn.Module):
                 configs["optimizer"].zero_grad()
                 output = self(data_in)
                 if configs["mask"] is not None:
-                    loss = configs["loss_fn"](
-                        output, data_out.x, configs["mask"].to(
-                            configs["device"])
-                    )
+                    try:
+                        loss = configs["loss_fn"](
+                            output, data_out.x, configs["mask"].to(configs["device"])
+                        )
+                    except Exception as e:
+                        logger.error("Error occurred while calculating loss: %s", e)
+                        raise e
                 else:
-                    loss = configs["loss_fn"](output, data_out.x)
+                    try:
+                        loss = configs["loss_fn"](output, data_out.x)
+                    except Exception as e:
+                        logger.error("Error occurred while calculating loss: %s", e)
+                        raise e
                 loss.backward()
                 configs["optimizer"].step()
                 if configs["scheduler"] is not None:
@@ -567,6 +662,7 @@ class GNNModel(torch.nn.Module):
 
         Returns:
             float: The loss achieved during evaluation.
+
         """
         self.eval()
         with torch.no_grad():
@@ -577,12 +673,19 @@ class GNNModel(torch.nn.Module):
                 data_out = data_out.to(configs["device"])
                 output = self(data_in)
                 if configs["mask"] is not None:
-                    loss += configs["loss_fn"](
-                        output, data_out.x, configs["mask"].to(
-                            configs["device"])
-                    )
+                    try:
+                        loss += configs["loss_fn"](
+                            output, data_out.x, configs["mask"].to(configs["device"])
+                        )
+                    except Exception as e:
+                        logger.error("Error occurred while calculating loss: %s", e)
+                        raise e
                 else:
-                    loss += configs["loss_fn"](output, data_out.x)
+                    try:
+                        loss += configs["loss_fn"](output, data_out.x)
+                    except Exception as e:
+                        logger.error("Error occurred while calculating loss: %s", e)
+                        raise e
                 y_preds.append(output.cpu())
             loss /= len(configs["loader_in"])
             return loss, y_preds

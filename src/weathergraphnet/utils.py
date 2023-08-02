@@ -21,6 +21,7 @@ Functions:
 """
 # Standard library
 import json
+import logging
 import os
 import socket
 import warnings
@@ -50,6 +51,24 @@ from torch.utils.data import Dataset
 # First-party
 from weathergraphnet.models import GNNModel
 from weathergraphnet.models import UNet
+
+
+def setup_logger() -> logging.Logger:
+    """Set up a logger for the module."""
+    general_logger = logging.getLogger(__name__)
+    general_logger.setLevel(logging.DEBUG)
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+    file_handler = logging.FileHandler("error.log")
+    file_handler.setLevel(logging.ERROR)
+    file_handler.setFormatter(formatter)
+    general_logger.addHandler(file_handler)
+
+    return general_logger
+
+
+logger = setup_logger()
 
 
 class CRPSLoss(nn.Module):
@@ -86,18 +105,23 @@ class CRPSLoss(nn.Module):
 
         """
         # Calculate the mean and standard deviation of the predicted distribution
-        mu = torch.mean(outputs, dim=dim)  # Mean over ensemble members
-        # Stddev over ensemble members
-        sigma = torch.std(outputs, dim=dim) + 1e-6
+        try:
+            mu = torch.mean(outputs, dim=dim)  # Mean over ensemble members
+            # Stddev over ensemble members
+            sigma = torch.std(outputs, dim=dim) + 1e-6
 
-        # Create a normal distribution with the predicted mean and standard deviation
-        dist = Normal(mu, sigma)
+            # Create a normal distribution with the predicted mean and standard
+            # deviation
+            dist = Normal(mu, sigma)
 
-        # Calculate the CRPS loss for each sample in the batch Mean over ensemble
-        # members and spatial locations
-        crps_loss = torch.mean((dist.cdf(target) - 0.5) ** 2, dim=[1, 2, 3])
+            # Calculate the CRPS loss for each sample in the batch Mean over ensemble
+            # members and spatial locations
+            crps_loss = torch.mean((dist.cdf(target) - 0.5) ** 2, dim=[1, 2, 3])
 
-        return crps_loss
+            return crps_loss
+        except Exception as e:
+            logger.exception("Error calculating CRPS loss: %s", e)
+            raise
 
 
 class EnsembleVarianceRegularizationLoss(nn.Module):
@@ -138,10 +162,16 @@ class EnsembleVarianceRegularizationLoss(nn.Module):
             l1_loss + regularization_loss: Loss for each sample in the batch.
 
         """
-        l1_loss = torch.mean(torch.abs(outputs - target))
-        ensemble_variance = torch.var(outputs, dim=1)
-        regularization_loss = -self.alpha * torch.mean(ensemble_variance)
-        return l1_loss + regularization_loss
+        try:
+            l1_loss = torch.mean(torch.abs(outputs - target))
+            ensemble_variance = torch.var(outputs, dim=1)
+            regularization_loss = -self.alpha * torch.mean(ensemble_variance)
+            return l1_loss + regularization_loss
+        except Exception as e:
+            logger.exception(
+                "Error calculating ensemble variance regularization loss: %s", e
+            )
+            raise
 
 
 class MaskedLoss(nn.Module):
@@ -183,17 +213,22 @@ class MaskedLoss(nn.Module):
             mean_loss: Mean loss over all unmasked cells.
 
         """
-        # Calculate the loss for each sample in the batch using the specified loss
-        # function
-        loss = self.loss_fn(outputs, target)
+        try:
+            # Calculate the loss for each sample in the batch using the specified loss
+            # function
+            loss = self.loss_fn(outputs, target)
 
-        # Mask the loss for cells where the values stay constant over all observed times
-        masked_loss = loss * mask
+            # Mask the loss for cells where the values stay constant over all observed
+            # times
+            masked_loss = loss * mask
 
-        # Calculate the mean loss over all unmasked cells
-        mean_loss = torch.sum(masked_loss) / torch.sum(mask)
+            # Calculate the mean loss over all unmasked cells
+            mean_loss = torch.sum(masked_loss) / torch.sum(mask)
 
-        return mean_loss
+            return mean_loss
+        except Exception as e:
+            logger.exception("Error calculating masked loss: %s", e)
+            raise
 
 
 class MyDataset(Dataset):
@@ -219,26 +254,35 @@ class MyDataset(Dataset):
             split: The split between train and test sets.
 
         """
-        self.data: xr.Dataset = data
-        self.split = split
-        # Get the number of members in the dataset
-        num_members: int = self.data.sizes["member"]
+        super().__init__()
+        try:
+            self.data: xr.Dataset = data
+            self.split = split
+            # Get the number of members in the dataset
+            num_members: int = self.data.sizes["member"]
 
-        # Get the indices of the members
-        member_indices: np.ndarray[Any, dtype[signedinteger[Any]]] = np.arange(
-            num_members
-        )
+            # Get the indices of the members
+            member_indices: np.ndarray[Any, dtype[signedinteger[Any]]] = np.arange(
+                num_members
+            )
 
-        # Shuffle the member indices
-        np.random.shuffle(member_indices)
+            # Shuffle the member indices
+            np.random.shuffle(member_indices)
 
-        # Split the member indices into train and test sets
-        self.train_indices: np.ndarray = member_indices[: self.split]
-        self.test_indices: np.ndarray = member_indices[self.split :]
+            # Split the member indices into train and test sets
+            self.train_indices: np.ndarray = member_indices[: self.split]
+            self.test_indices: np.ndarray = member_indices[self.split :]
+        except Exception as e:
+            logger.exception("Error initializing custom dataset: %s", e)
+            raise
 
     def __len__(self) -> int:
         """Get the length of the dataset."""
-        return len(self.data.time)
+        try:
+            return len(self.data.time)
+        except Exception as e:
+            logger.exception("Error getting length of dataset: %s", e)
+            raise
 
     def __getitem__(self, idx: int) -> Tuple[xr.Dataset, xr.Dataset]:
         """Get the data for the train and test sets.
@@ -252,15 +296,27 @@ class MyDataset(Dataset):
             x, y: Data for the train and test sets.
 
         """
-        # Get the data for the train and test sets
-        x: xr.Dataset = self.data.isel(member=self.train_indices, time=idx).unsqueeze(1)
-        y: xr.Dataset = self.data.isel(member=self.test_indices, time=idx).unsqueeze(1)
+        try:
+            # Get the data for the train and test sets
+            x: xr.Dataset = self.data.isel(
+                member=self.train_indices, time=idx
+            ).unsqueeze(1)
+            y: xr.Dataset = self.data.isel(
+                member=self.test_indices, time=idx
+            ).unsqueeze(1)
 
-        return x, y
+            return x, y
+        except Exception as e:
+            logger.exception("Error getting data for train and test sets: %s", e)
+            raise
 
     def __iter__(self):
-        """Get the iterator."""
-        return iter(self.data.time)
+        """Get an iterator for the dataset."""
+        try:
+            return iter(self.data.time)
+        except Exception as e:
+            logger.exception("Error getting iterator for dataset: %s", e)
+            raise
 
 
 def animate(
@@ -277,53 +333,64 @@ def animate(
         ani: The animation.
 
     """
-    # Create a new figure object
-    fig, ax = plt.subplots()
+    try:
+        # Create a new figure object
+        fig, ax = plt.subplots()
 
-    # Calculate the 5% and 95% percentile of the y_mem data
-    vmin, vmax = np.percentile(np.array(data.values), [1, 99])
-    # Create a colormap with grey for values outside of the range
-    cmap = cm.get_cmap("RdBu_r")
-    cmap.set_bad(color="grey")
+        # Calculate the 5% and 95% percentile of the y_mem data
+        vmin, vmax = np.percentile(np.array(data.values), [1, 99])
+        # Create a colormap with grey for values outside of the range
+        cmap = cm.get_cmap("RdBu_r")
+        cmap.set_bad(color="grey")
 
-    im: AxesImage = data.isel(time=0).plot(ax=ax, cmap=cmap, vmin=vmin, vmax=vmax)
+        im: AxesImage = data.isel(time=0).plot(ax=ax, cmap=cmap, vmin=vmin, vmax=vmax)
 
-    plt.gca().invert_yaxis()
+        plt.gca().invert_yaxis()
 
-    text = ax.text(
-        0.5,
-        1.05,
-        "Theta_v - Time: 0 s\n Member: 0 - None",
-        ha="center",
-        va="bottom",
-        transform=ax.transAxes,
-        fontsize=12,
-    )
-    plt.tight_layout()
-    ax.set_title("")  # Remove the plt.title
-
-    def update(frame: int) -> Tuple:
-        """Update the data of the current plot.
-
-        Args:
-            frame: The frame to update.
-
-        Returns:
-            im, text: The updated plot.
-
-        """
-        time_in_seconds = round((data.time[frame] - data.time[0]).item() * 24 * 3600)
-        im.set_array(data.isel(time=frame))
-        title = (
-            f"Var: Theta_v - Time: {time_in_seconds:.0f} s\n Member: {member} - {preds}"
+        text = ax.text(
+            0.5,
+            1.05,
+            "Theta_v - Time: 0 s\n Member: 0 - None",
+            ha="center",
+            va="bottom",
+            transform=ax.transAxes,
+            fontsize=12,
         )
-        text.set_text(title)
-        return im, text
+        plt.tight_layout()
+        ax.set_title("")  # Remove the plt.title
 
-    ani = animation.FuncAnimation(
-        fig, update, frames=range(len(data.time)), interval=50, blit=True
-    )
-    return ani
+        def update(frame: int) -> Tuple:
+            """Update the data of the current plot.
+
+            Args:
+                frame: The frame to update.
+
+            Returns:
+                im, text: The updated plot.
+
+            """
+            try:
+                time_in_seconds = round(
+                    (data.time[frame] - data.time[0]).item() * 24 * 3600
+                )
+                im.set_array(data.isel(time=frame))
+                title = (
+                    f"Var: Theta_v - Time: {time_in_seconds:.0f} s\n"
+                    f"Member: {member} - {preds}"
+                )
+                text.set_text(title)
+                return im, text
+            except Exception as e:
+                logger.error("Error updating plot: %s", e)
+                raise e
+
+        ani = animation.FuncAnimation(
+            fig, update, frames=range(len(data.time)), interval=50, blit=True
+        )
+        return ani
+    except Exception as e:
+        logger.error("Error creating animation: %s", e)
+        raise e
 
 
 def create_animation(data: dict, member: int, preds: str) -> str:
@@ -337,6 +404,10 @@ def create_animation(data: dict, member: int, preds: str) -> str:
     Returns:
         str: The filepath of the output gif.
 
+    Raises:
+        ValueError: If the member index is out of range.
+        ValueError: If the prediction type is not recognized.
+
     """
     y_pred_reshaped = data["y_pred_reshaped"]
     data_test = data["data_test"]
@@ -346,18 +417,37 @@ def create_animation(data: dict, member: int, preds: str) -> str:
     # Plot the first time step of the variable
     if preds == "ICON":
         y_mem = data_test.isel(member=member)
-    else:
+    elif preds == "CNN":
         y_mem = y_pred_reshaped.isel(member=member)
+    else:
+        raise ValueError(f"Unrecognized prediction type: {preds}")
 
     y_mem = y_mem.sortby(y_mem.time, ascending=True)
 
-    ani = animate(y_mem, member=member, preds=preds)
+    try:
+        ani = animate(y_mem, member=member, preds=preds)
+    except Exception as e:
+        logger.exception(
+            f"Error creating animation for member {member}"
+            f" and prediction type {preds}: %s",
+            e,
+        )
+        raise
 
     # Define the filename for the output gif
     output_filename = f"{here()}/output/animation_member_{member}_{preds}.gif"
 
-    # Save the animation as a gif
-    ani.save(output_filename, writer="imagemagick", dpi=100)
+    try:
+        # Save the animation as a gif
+        ani.save(output_filename, writer="imagemagick", dpi=100)
+    except Exception as e:
+        logger.exception(
+            f"Error saving animation for member {member}"
+            f"and prediction type {preds}: %s",
+            e,
+        )
+        raise
+
     return output_filename
 
 
@@ -371,7 +461,13 @@ def downscale_data(data: xr.Dataset, factor: int) -> xr.Dataset:
     Returns:
         The downscaled data.
 
+    Raises:
+        ValueError: If the factor is not a positive integer.
+
     """
+    if not isinstance(factor, int) or factor <= 0:
+        raise ValueError(f"Factor must be a positive integer, but got {factor}")
+
     with dask.config.set(
         Dict[str, bool](**{"array.slicing.split_large_chunks": False})
     ):
@@ -408,15 +504,26 @@ def load_best_model(experiment_name: str) -> Union[GNNModel, UNet]:
     Returns:
         nn.Module: The PyTorch model object.
 
-    """
-    runs = get_runs(experiment_name)
-    run_id = runs[0]["run_id"]
-    best_model_path = mlflow.get_artifact_uri()
-    best_model_path = os.path.abspath(os.path.join(best_model_path, "../../"))
-    best_model_path = os.path.join(best_model_path, run_id, "artifacts", "models")
-    model = mlflow.pytorch.load_model(best_model_path)
+    Raises:
+        ValueError: If no runs are found for the given experiment name.
+        FileNotFoundError: If the best model path does not exist.
 
-    return model
+    """
+    try:
+        runs = get_runs(experiment_name)
+        run_id = runs[0]["run_id"]
+        best_model_path = mlflow.get_artifact_uri()
+        best_model_path = os.path.abspath(os.path.join(best_model_path, "../../"))
+        best_model_path = os.path.join(best_model_path, run_id, "artifacts", "models")
+        if not os.path.exists(best_model_path):
+            raise FileNotFoundError(
+                f"Best model path does not exist: {best_model_path}"
+            )
+        model = mlflow.pytorch.load_model(best_model_path)
+        return model
+    except (ValueError, FileNotFoundError) as e:
+        logger.exception(str(e))
+        raise e
 
 
 def load_config_and_data() -> Tuple[dict, xr.Dataset, xr.Dataset]:
@@ -426,23 +533,36 @@ def load_config_and_data() -> Tuple[dict, xr.Dataset, xr.Dataset]:
     Tuple[dict, xr.Dataset, xr.Dataset]: A tuple containing the configuration
         dictionary, and two xarray DataArrays containing the training and testing data.
 
+    Raises:
+        FileNotFoundError: If the configuration file or data files do not exist.
+        ValueError: If the coarsen factor is not a positive integer.
+
     """
-    with open(
-        str(here()) + "/src/weathergraphnet/config.json", "r", encoding="UTF-8"
-    ) as f:
-        config = json.load(f)
+    try:
+        with open(
+            str(here()) + "/src/weathergraphnet/config.json", "r", encoding="UTF-8"
+        ) as f:
+            config = json.load(f)
 
-    # Suppress all warnings
-    suppress_warnings()
+        # Suppress all warnings
+        suppress_warnings()
 
-    data_train, data_test = load_data(config)
+        data_train, data_test = load_data(config)
 
-    if config["coarsen"] > 1:
-        # Coarsen the data
-        data_test = downscale_data(data_test, config["coarsen"])
-        data_train = downscale_data(data_train, config["coarsen"])
+        if config["coarsen"] > 1:
+            # Coarsen the data
+            if not isinstance(config["coarsen"], int) or config["coarsen"] <= 0:
+                raise ValueError(
+                    f"Coarsen factor must be a positive integer, "
+                    f"but got {config['coarsen']}"
+                )
+            data_test = downscale_data(data_test, config["coarsen"])
+            data_train = downscale_data(data_train, config["coarsen"])
 
-    return config, data_train, data_test
+        return config, data_train, data_test
+    except (FileNotFoundError, ValueError) as e:
+        logger.exception(str(e))
+        raise e
 
 
 def load_data(config: dict) -> Tuple[xr.Dataset, xr.Dataset]:
@@ -455,28 +575,39 @@ def load_data(config: dict) -> Tuple[xr.Dataset, xr.Dataset]:
         Tuple[xr.Dataset, xr.Dataset]: A tuple containing the training and test data
         as xarray Dataset.
 
+    Raises:
+        FileNotFoundError: If the data files do not exist.
+
     """
-    # Load the training data
-    data_train = xr.open_zarr(str(here()) + config["data_train"]).to_array().squeeze()
-    data_train = data_train.transpose(
-        "time",
-        "member",
-        "height",
-        "ncells",
-    )
+    try:
+        # Load the training data
+        data_train = (
+            xr.open_zarr(str(here()) + config["data_train"]).to_array().squeeze()
+        )
+        data_train = data_train.transpose(
+            "time",
+            "member",
+            "height",
+            "ncells",
+        )
 
-    # Load the test data
-    data_test = (
-        xr.open_zarr(str(here()) + config["data_test"]).to_array().squeeze(drop=False)
-    )
-    data_test = data_test.transpose(
-        "time",
-        "member",
-        "height",
-        "ncells",
-    )
+        # Load the test data
+        data_test = (
+            xr.open_zarr(str(here()) + config["data_test"])
+            .to_array()
+            .squeeze(drop=False)
+        )
+        data_test = data_test.transpose(
+            "time",
+            "member",
+            "height",
+            "ncells",
+        )
 
-    return data_train, data_test
+        return data_train, data_test
+    except FileNotFoundError as e:
+        logger.exception(str(e))
+        raise e
 
 
 def setup_mlflow() -> Tuple[str, str]:
@@ -485,24 +616,30 @@ def setup_mlflow() -> Tuple[str, str]:
     Returns the artifact path and experiment name as a tuple.
 
     """
-    hostname = socket.gethostname()
-    # Set the artifact path based on the hostname
-    if "nid" in hostname:
-        artifact_path = (
-            "/scratch/e1000/meteoswiss/scratch/sadamov/"
-            "pyprojects_data/weathergraphnet/mlruns"
-        )
-        experiment_name = "WGN_balfrin"
-    else:
-        artifact_path = "/scratch/sadamov/pyprojects_data/weathergraphnet/mlruns"
-        experiment_name = "WGN"
+    try:
+        hostname = socket.gethostname()
+        # Set the artifact path based on the hostname
+        if "nid" in hostname:
+            artifact_path = (
+                "/scratch/e1000/meteoswiss/scratch/sadamov/"
+                "pyprojects_data/weathergraphnet/mlruns"
+            )
+            experiment_name = "WGN_balfrin"
+        else:
+            artifact_path = "/scratch/sadamov/pyprojects_data/weathergraphnet/mlruns"
+            experiment_name = "WGN"
 
-    mlflow.set_tracking_uri(str(here()) + "/mlruns")
-    existing_experiment = mlflow.get_experiment_by_name(experiment_name)
-    if existing_experiment is None:
-        mlflow.create_experiment(name=experiment_name, artifact_location=artifact_path)
-    mlflow.set_experiment(experiment_name=experiment_name)
-    return artifact_path, experiment_name
+        mlflow.set_tracking_uri(str(here()) + "/mlruns")
+        existing_experiment = mlflow.get_experiment_by_name(experiment_name)
+        if existing_experiment is None:
+            mlflow.create_experiment(
+                name=experiment_name, artifact_location=artifact_path
+            )
+        mlflow.set_experiment(experiment_name=experiment_name)
+        return artifact_path, experiment_name
+    except Exception as e:
+        logger.exception(str(e))
+        raise e
 
 
 def suppress_warnings():

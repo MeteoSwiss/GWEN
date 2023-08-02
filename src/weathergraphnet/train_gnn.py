@@ -73,7 +73,10 @@ from weathergraphnet.utils import load_best_model
 from weathergraphnet.utils import load_config_and_data
 from weathergraphnet.utils import MaskedLoss
 from weathergraphnet.utils import MyDataset
+from weathergraphnet.utils import setup_logger
 from weathergraphnet.utils import setup_mlflow
+
+logger = setup_logger()
 
 
 @dataclass
@@ -109,14 +112,18 @@ def create_data_loader(
         A PyTorch DataLoader object.
 
     """
-    dataset = [
-        Data(
-            x=torch.tensor(sample, dtype=torch.float32).view(nodes, -1),
-            edge_index=edge_index,
-        )
-        for sample in np.array(data.values)
-    ]
-    return DataLoader(dataset, batch_size=batch, shuffle=True)
+    try:
+        dataset = [
+            Data(
+                x=torch.tensor(sample, dtype=torch.float32).view(nodes, -1),
+                edge_index=edge_index,
+            )
+            for sample in np.array(data.values)
+        ]
+        return DataLoader(dataset, batch_size=batch, shuffle=True)
+    except Exception as error:
+        logger.error("Error creating data loader: %s", error)
+        raise
 
 
 class CustomSampler(Sampler):
@@ -138,9 +145,13 @@ class CustomSampler(Sampler):
             batch (int): The batch size.
 
         """
-        self.data = data
-        self.edge_index = edge_index
-        self.batch = batch
+        try:
+            self.data = data
+            self.edge_index = edge_index
+            self.batch = batch
+        except Exception as error:
+            logger.error("Error initializing custom sampler: %s", error)
+            raise
 
     def __len__(self) -> int:
         """Return the number of samples in the dataset.
@@ -149,7 +160,11 @@ class CustomSampler(Sampler):
             The number of samples in the dataset.
 
         """
-        return len(self.edge_index)
+        try:
+            return len(self.edge_index)
+        except Exception as error:
+            logger.error("Error getting length of custom sampler: %s", error)
+            raise
 
     def __iter__(self):
         """Return an iterator over the indices of the samples in the dataset.
@@ -158,13 +173,17 @@ class CustomSampler(Sampler):
             An iterator over the indices of the samples in the dataset.
 
         """
-        batch_sampler = BatchSampler(
-            SequentialSampler(self.edge_index),
-            batch_size=self.batch,
-            drop_last=False,
-        )
-        indices = [index for batch in batch_sampler for index in batch]
-        return iter(indices)
+        try:
+            batch_sampler = BatchSampler(
+                SequentialSampler(self.edge_index),
+                batch_size=self.batch,
+                drop_last=False,
+            )
+            indices = [index for batch in batch_sampler for index in batch]
+            return iter(indices)
+        except Exception as error:
+            logger.error("Error iterating over custom sampler: %s", error)
+            raise
 
     def __getitem__(self, index: int) -> Tuple[xr.Dataset, xr.Dataset]:
         """Return the data sample at the specified index.
@@ -176,10 +195,14 @@ class CustomSampler(Sampler):
             The data sample at the specified index.
 
         """
-        src, dst = self.edge_index[index]
-        x = self.data.isel(ncells=src)
-        y = self.data.isel(ncells=dst)
-        return x, y
+        try:
+            src, dst = self.edge_index[index]
+            x = self.data.isel(ncells=src)
+            y = self.data.isel(ncells=dst)
+            return x, y
+        except Exception as error:
+            logger.error("Error getting item from custom sampler: %s", error)
+            raise
 
 
 @dataclass
@@ -262,69 +285,73 @@ def create_data_sampler(
         DataLoader: The data loader.
 
     """
-    dataset = [
-        torch_geometric.data.Data(
-            x=torch.tensor(sample, dtype=torch.float32).view(nodes, -1),
-            edge_index=edge_index,
+    try:
+        dataset = [
+            torch_geometric.data.Data(
+                x=torch.tensor(sample, dtype=torch.float32).view(nodes, -1),
+                edge_index=edge_index,
+            )
+            for sample in np.array(data.values)
+        ]
+        # Create a dataset from the data and labels
+        tensor_dataset = torch.utils.data.TensorDataset(*dataset)
+        # Create a random sampler for the data
+        sampler = CustomSampler(data, edge_index, batch)
+        # Create a collate function to convert the data into mini-batches
+
+        def collate_fn(batch):
+            """Collate function for the data loader.
+
+            Args:
+                batch (List): The batch of data to collate.
+
+            Returns:
+                torch_geometric.data.Batch: The collated data.
+
+            """
+            # Extract the subgraphs and labels from the batch
+            subgraphs = [item[0] for item in batch]
+            labels_batch = [item[1:] for item in batch]
+
+            # Pad the subgraphs to the same number of nodes
+            max_nodes = max(subgraph.num_nodes for subgraph in subgraphs)
+            for subgraph in subgraphs:
+                num_nodes = subgraph.num_nodes
+                if num_nodes < max_nodes:
+                    subgraph.x = torch.cat(
+                        [
+                            subgraph.x,
+                            torch.zeros(
+                                (max_nodes - num_nodes, subgraph.num_node_features)
+                            ),
+                        ],
+                        dim=0,
+                    )
+                    subgraph.edge_index = torch.cat(
+                        [subgraph.edge_index, torch.zeros((2, max_nodes - num_nodes))],
+                        dim=1,
+                    )
+
+            # Convert the subgraphs and labels to tensors
+            labels_batch = [torch.cat(labels, dim=0) for labels in zip(*labels_batch)]
+            labels_batch = [torch.cat(labels, dim=0) for labels in zip(*labels_batch)]
+
+            return subgraphs, *labels_batch
+
+        # Create a data loader with the specified batch size and collate function
+        loader = DataLoader(
+            tensor_dataset,
+            batch_size=batch,
+            sampler=sampler,
+            collate_fn=collate_fn,
+            num_workers=workers,
+            pin_memory=True,
+            drop_last=True,
         )
-        for sample in np.array(data.values)
-    ]
-    # Create a dataset from the data and labels
-    tensor_dataset = torch.utils.data.TensorDataset(*dataset)
-    # Create a random sampler for the data
-    sampler = CustomSampler(data, edge_index, batch)
-    # Create a collate function to convert the data into mini-batches
-
-    def collate_fn(batch):
-        """Collate function for the data loader.
-
-        Args:
-            batch (List): The batch of data to collate.
-
-        Returns:
-            torch_geometric.data.Batch: The collated data.
-
-        """
-        # Extract the subgraphs and labels from the batch
-        subgraphs = [item[0] for item in batch]
-        labels_batch = [item[1:] for item in batch]
-
-        # Pad the subgraphs to the same number of nodes
-        max_nodes = max(subgraph.num_nodes for subgraph in subgraphs)
-        for subgraph in subgraphs:
-            num_nodes = subgraph.num_nodes
-            if num_nodes < max_nodes:
-                subgraph.x = torch.cat(
-                    [
-                        subgraph.x,
-                        torch.zeros(
-                            (max_nodes - num_nodes, subgraph.num_node_features)
-                        ),
-                    ],
-                    dim=0,
-                )
-                subgraph.edge_index = torch.cat(
-                    [subgraph.edge_index, torch.zeros((2, max_nodes - num_nodes))],
-                    dim=1,
-                )
-
-        # Convert the subgraphs and labels to tensors
-        labels_batch = [torch.cat(labels, dim=0) for labels in zip(*labels_batch)]
-        labels_batch = [torch.cat(labels, dim=0) for labels in zip(*labels_batch)]
-
-        return subgraphs, *labels_batch
-
-    # Create a data loader with the specified batch size and collate function
-    loader = DataLoader(
-        tensor_dataset,
-        batch_size=batch,
-        sampler=sampler,
-        collate_fn=collate_fn,
-        num_workers=workers,
-        pin_memory=True,
-        drop_last=True,
-    )
-    return loader
+        return loader
+    except Exception as error:
+        logger.error("Error creating data sampler: %s", error)
+        raise
 
 
 if __name__ == "__main__":
@@ -336,152 +363,171 @@ if __name__ == "__main__":
     data_test_in: xr.Dataset
     data_test_out: xr.Dataset
     data_train_in, data_train_out = MyDataset(data_train, config["member_split"])
-    data_train_in, data_train_out = MyDataset(data_train, config["member_split"])
-    data_test_in, data_test_out = MyDataset(data_test, config["member_split"])
 
-    # Define the Graph Neural Network architecture
-    nodes_in = data_train_in.shape[1]
-    nodes_out = data_train_out.shape[1]
-    channels_in = data_train_in.shape[2] * data_train_in.shape[3]
-    channels_out = data_train_out.shape[2] * data_train_out.shape[3]
-    # Define the edge indices for the graph
-    edge_index_in = erdos_renyi_graph(nodes_in, edge_prob=1)
-    edge_index_out = erdos_renyi_graph(nodes_out, edge_prob=1)
+    try:
+        data_train_in, data_train_out = MyDataset(data_train, config["member_split"])
+        data_test_in, data_test_out = MyDataset(data_test, config["member_split"])
+    except IndexError as e:
+        logger.exception("Error occurred while creating datasets: %s", e)
+    try:
+        # Define the Graph Neural Network architecture
+        nodes_in = data_train_in.shape[1]
+        nodes_out = data_train_out.shape[1]
+        channels_in = data_train_in.shape[2] * data_train_in.shape[3]
+        channels_out = data_train_out.shape[2] * data_train_out.shape[3]
+        # Define the edge indices for the graph
+        edge_index_in = erdos_renyi_graph(nodes_in, edge_prob=1)
+        edge_index_out = erdos_renyi_graph(nodes_out, edge_prob=1)
+    except IndexError as e:
+        logger.exception("Error occurred while defining GNN architecture: %s", e)
 
-    # Create data loaders
-    sample = False
-    if sample:
-        loader_train_in = create_data_sampler(
-            data_train_in,
-            edge_index_in,
-            nodes_in,
-            config["batch_size"],
-            config["num_workers"],
-        )
-        loader_train_out = create_data_sampler(
-            data_train_out,
-            edge_index_out,
-            nodes_out,
-            config["batch_size"],
-            config["num_workers"],
-        )
-        loader_test_in = create_data_sampler(
-            data_test_in,
-            edge_index_in,
-            nodes_in,
-            config["batch_size"],
-            config["num_workers"],
-        )
-        loader_test_out = create_data_sampler(
-            data_test_out,
-            edge_index_out,
-            nodes_out,
-            config["batch_size"],
-            config["num_workers"],
-        )
-    else:
-        loader_train_in = create_data_loader(
-            data_train_in, edge_index_in, nodes_in, config["batch_siz"]
-        )
-        loader_train_out = create_data_loader(
-            data_train_out, edge_index_out, nodes_out, config["batch_siz"]
-        )
-        loader_test_in = create_data_loader(
-            data_test_in, edge_index_in, nodes_in, config["batch_siz"]
-        )
-        loader_test_out = create_data_loader(
-            data_test_out, edge_index_out, nodes_out, config["batch_siz"]
-        )
-
-    loss_fn: Union[
-        EnsembleVarianceRegularizationLoss, MaskedLoss, nn.MSELoss, nn.Module
-    ] = EnsembleVarianceRegularizationLoss(alpha=0.1)
-
-    if loss_fn == MaskedLoss:
-        # Create a mask that masks all cells that stay constant over all time steps
-        variance = data_train.var(dim="time")
-        # Create a mask that hides all data with zero variance
-        mask = variance <= config["mask_threshold"]
-        print(f"Number of masked cells: {(mask[0].values == 1).sum()}", flush=True)
-        print(f"Number of masked cells: {(mask[0].values == 1).sum()}", flush=True)
-
-    artifact_path, experiment_name = setup_mlflow()
-
-    if config["retrain"]:
-        gnn_config = GNNConfig(
-            nodes_in=nodes_in,
-            nodes_out=nodes_out,
-            in_channels=channels_in,
-            out_channels=channels_out,
-            hidden_feats=64,
-        )
-        model = GNNModel(gnn_config)
-        optimizer = optim.Adam(model.parameters())
-        scheduler = CyclicLR(
-            optimizer,
-            base_lr=config["lr"],
-            max_lr=10 * config["lr"],
-            mode="triangular2",
-            cycle_momentum=False,
-        )
-
-        # Train the model with MLflow logging
-        MLFlowLogger(experiment_name=experiment_name)
-        with mlflow.start_run():
-            # Train the model Create a TrainingConfig object that contains both the
-            # local variables and the JSON parameters
-            config_train = TrainingConfig(  # pylint: disable=too-many-function-args
-                loader_train_in=loader_train_in,
-                loader_train_out=loader_train_out,
-                optimizer=optimizer,
-                scheduler=scheduler,
-                loss_fn=loss_fn,
-                mask=mask,
-                num_epochs=config["epochs"],
-                device=config["device"],
-                seed=config["seed"],
+    try:
+        # Create data loaders
+        sample = False
+        if sample:
+            loader_train_in = create_data_sampler(
+                data_train_in,
+                edge_index_in,
+                nodes_in,
+                config["batch_size"],
+                config["num_workers"],
             )
-            # Pass the TrainingConfig object to the train method
-            if torch.cuda.device_count() > 1:
-                model = cast(GNNModel, nn.DataParallel(model).module)
-                loss_fn = nn.DataParallel(loss_fn)
-            model.train_with_configs(config_train)
-
-    else:
-        # Load the best model from the most recent MLflow run
-        model_best = load_best_model(experiment_name)
-        if isinstance(model_best, GNNModel):
-            model = model_best
+            loader_train_out = create_data_sampler(
+                data_train_out,
+                edge_index_out,
+                nodes_out,
+                config["batch_size"],
+                config["num_workers"],
+            )
+            loader_test_in = create_data_sampler(
+                data_test_in,
+                edge_index_in,
+                nodes_in,
+                config["batch_size"],
+                config["num_workers"],
+            )
+            loader_test_out = create_data_sampler(
+                data_test_out,
+                edge_index_out,
+                nodes_out,
+                config["batch_size"],
+                config["num_workers"],
+            )
         else:
-            model = cast(GNNModel, model_best)
+            loader_train_in = create_data_loader(
+                data_train_in, edge_index_in, nodes_in, config["batch_size"]
+            )
+            loader_train_out = create_data_loader(
+                data_train_out, edge_index_out, nodes_out, config["batch_size"]
+            )
+            loader_test_in = create_data_loader(
+                data_test_in, edge_index_in, nodes_in, config["batch_size"]
+            )
+            loader_test_out = create_data_loader(
+                data_test_out, edge_index_out, nodes_out, config["batch_size"]
+            )
+    except (IndexError, TypeError) as e:
+        logger.exception("Error occurred while creating data loaders: %s", e)
 
-    y_pred: List[torch.Tensor] = []
-    # Evaluate the model on the test data
-    # pylint: disable=R0801
-    config_eval = EvaluationConfig(
-        loader_in=loader_test_in,
-        loader_out=loader_test_out,
-        loss_fn=loss_fn,
-        mask=mask,
-        device=config["device"],
-        seed=config["seed"],
-    )
-    if torch.cuda.device_count() > 1:
-        print(f"Using {torch.cuda.device_count()} GPUs")
-        model = cast(GNNModel, nn.DataParallel(model).module)
-    test_loss, y_pred = model.eval_with_configs(config_eval)
-    print(f"Best model test loss: {test_loss:.4f}")
+    try:
+        loss_fn: Union[
+            EnsembleVarianceRegularizationLoss, MaskedLoss, nn.MSELoss, nn.Module
+        ] = EnsembleVarianceRegularizationLoss(alpha=0.1)
 
-    # Plot the predictions
+        if loss_fn == MaskedLoss:
+            # Create a mask that masks all cells that stay constant over all time steps
+            variance = data_train.var(dim="time")
+            # Create a mask that hides all data with zero variance
+            mask = variance <= config["mask_threshold"]
+            logger.info("Number of masked cells: %d", (mask[0].values == 1).sum())
+            logger.info("Number of masked cells: %d", (mask[0].values == 1).sum())
+    except (ValueError, TypeError) as e:
+        logger.exception("Error occurred while creating loss function: %s", e)
+    try:
+        artifact_path, experiment_name = setup_mlflow()
 
-    y_pred_reshaped = xr.DataArray(
-        torch.cat(y_pred).numpy().reshape((np.array(data_test_out.values).shape)),
-        dims=["time", "member", "height", "ncells"],
-    )
+        if config["retrain"]:
+            gnn_config = GNNConfig(
+                nodes_in=nodes_in,
+                nodes_out=nodes_out,
+                in_channels=channels_in,
+                out_channels=channels_out,
+                hidden_feats=64,
+            )
+            model = GNNModel(gnn_config)
+            optimizer = optim.Adam(model.parameters())
+            scheduler = CyclicLR(
+                optimizer,
+                base_lr=config["lr"],
+                max_lr=10 * config["lr"],
+                mode="triangular2",
+                cycle_momentum=False,
+            )
 
-    data_gif = {
-        "y_pred_reshaped": y_pred_reshaped,
-        "data_test": data_test,
-    }
+            # Train the model with MLflow logging
+            MLFlowLogger(experiment_name=experiment_name)
+            with mlflow.start_run():
+                # Train the model Create a TrainingConfig object that contains both the
+                # local variables and the JSON parameters
+                config_train = TrainingConfig(  # pylint: disable=too-many-function-args
+                    loader_train_in=loader_train_in,
+                    loader_train_out=loader_train_out,
+                    optimizer=optimizer,
+                    scheduler=scheduler,
+                    loss_fn=loss_fn,
+                    mask=mask,
+                    num_epochs=config["epochs"],
+                    device=config["device"],
+                    seed=config["seed"],
+                )
+                # Pass the TrainingConfig object to the train method
+                if torch.cuda.device_count() > 1:
+                    model = cast(GNNModel, nn.DataParallel(model).module)
+                    loss_fn = nn.DataParallel(loss_fn)
+                model.train_with_configs(config_train)
 
-    output_filename = create_animation(data_gif, member=0, preds="GNN")
+        else:
+            # Load the best model from the most recent MLflow run
+            model_best = load_best_model(experiment_name)
+            if isinstance(model_best, GNNModel):
+                model = model_best
+            else:
+                model = cast(GNNModel, model_best)
+    except mlflow.exceptions.MlflowException as e:
+        logger.exception("Error occurred while setting up MLflow: %s", e)
+
+    try:
+        y_pred: List[torch.Tensor] = []
+        # Evaluate the model on the test data
+        # pylint: disable=R0801
+        config_eval = EvaluationConfig(
+            loader_in=loader_test_in,
+            loader_out=loader_test_out,
+            loss_fn=loss_fn,
+            mask=mask,
+            device=config["device"],
+            seed=config["seed"],
+        )
+        if torch.cuda.device_count() > 1:
+            logger.info("Using %d GPUs", torch.cuda.device_count())
+            model = cast(GNNModel, nn.DataParallel(model).module)
+        test_loss, y_pred = model.eval_with_configs(config_eval)
+        logger.info("Best model test loss: %.4f", test_loss)
+    except (RuntimeError, ValueError) as e:
+        logger.exception("Error occurred while evaluating model: %s", e)
+    try:
+        # Plot the predictions
+
+        y_pred_reshaped = xr.DataArray(
+            torch.cat(y_pred).numpy().reshape((np.array(data_test_out.values).shape)),
+            dims=["time", "member", "height", "ncells"],
+        )
+
+        data_gif = {
+            "y_pred_reshaped": y_pred_reshaped,
+            "data_test": data_test,
+        }
+
+        output_filename = create_animation(data_gif, member=0, preds="GNN")
+    except (ValueError, TypeError) as e:
+        logger.exception("Error occurred while creating animation: %s", e)
