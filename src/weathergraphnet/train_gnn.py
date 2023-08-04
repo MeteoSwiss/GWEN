@@ -40,12 +40,10 @@ Arguments:
 """
 
 # Standard library
-from dataclasses import dataclass
+import random
 from typing import cast
 from typing import List
-from typing import Optional
 from typing import Tuple
-from typing import Union
 
 # Third-party
 import mlflow  # type: ignore
@@ -56,7 +54,6 @@ import xarray as xr
 from pytorch_lightning.loggers import MLFlowLogger
 from torch import nn
 from torch import optim
-from torch.optim import Adam
 from torch.optim.lr_scheduler import CyclicLR
 from torch.utils.data import BatchSampler
 from torch.utils.data import Sampler
@@ -66,37 +63,21 @@ from torch_geometric.loader import DataLoader  # type: ignore
 from torch_geometric.utils import erdos_renyi_graph  # type: ignore
 
 # First-party
+from weathergraphnet.logger import setup_logger
+from weathergraphnet.models import EvaluationConfigGNN
+from weathergraphnet.models import GNNConfig
 from weathergraphnet.models import GNNModel
+from weathergraphnet.models import TrainingConfigGNN
 from weathergraphnet.utils import create_animation
-from weathergraphnet.utils import EnsembleVarianceRegularizationLoss
 from weathergraphnet.utils import load_best_model
 from weathergraphnet.utils import load_config_and_data
 from weathergraphnet.utils import MaskedLoss
 from weathergraphnet.utils import MyDataset
-from weathergraphnet.utils import setup_logger
 from weathergraphnet.utils import setup_mlflow
 
 logger = setup_logger()
 
-
-@dataclass
-class GNNConfig(dict):
-    """Configuration parameters for the GNN model.
-
-    Attributes:
-        nodes_in (int): The number of input nodes.
-        nodes_out (int): The number of output nodes.
-        in_channels (int): The number of input channels.
-        out_channels (int): The number of output channels.
-        hidden_feats (int): The number of hidden features.
-
-    """
-
-    nodes_in: int
-    nodes_out: int
-    in_channels: int
-    out_channels: int
-    hidden_feats: int
+# TODO: add dropout layers to all my models!
 
 
 def create_data_loader(
@@ -205,66 +186,6 @@ class CustomSampler(Sampler):
             raise
 
 
-@dataclass
-class TrainingConfig(dict):  # pylint: disable=too-many-instance-attributes
-    """Training configuration parameters.
-
-    Args:
-        loader_train_in (DataLoader): The data loader for the input training data.
-        loader_train_out (DataLoader): The data loader for the output training data.
-        optimizer (nn.Module): The optimizer to use for training.
-        scheduler (nn.Module): The learning rate scheduler to use for training.
-        loss_fn (nn.Module): The loss function to use for training.
-        mask (Optional[torch.Tensor]): The mask to use for training.
-        num_epochs (int): The number of epochs to train for. Default is 10.
-        device (str): The device to use for training. Default is "cuda".
-        seed (int): The random seed to use for training. Default is 42.
-
-    """
-
-    loader_train_in: DataLoader
-    loader_train_out: DataLoader
-    optimizer: Union[optim.Optimizer, torch.optim.Optimizer, Adam]
-    scheduler: Union[CyclicLR, torch.optim.lr_scheduler.CyclicLR]
-    loss_fn: Union[
-        nn.Module,
-        EnsembleVarianceRegularizationLoss,
-        nn.MSELoss,
-        nn.DataParallel,
-    ]
-    mask: Optional[torch.Tensor] = None
-    num_epochs: int = 10
-    device: str = "cuda"
-    seed: int = 42
-
-
-@dataclass
-class EvaluationConfig(dict):
-    """Configuration class for evaluation of a GNN model.
-
-    Attributes:
-        loader_in (DataLoader): Input data loader.
-        loader_out (DataLoader): Output data loader.
-        loss_fn (nn.Module): Loss function for the evaluation.
-        mask (Optional[torch.Tensor], optional): Mask tensor for the evaluation.
-        device (str, optional): Device to use for evaluation. Defaults to "cuda".
-        seed (int, optional): Random seed for evaluation. Defaults to 42.
-
-    """
-
-    loader_in: DataLoader
-    loader_out: DataLoader
-    loss_fn: Union[
-        nn.Module,
-        EnsembleVarianceRegularizationLoss,
-        nn.MSELoss,
-        nn.DataParallel,
-    ]
-    mask: Optional[torch.Tensor] = None
-    device: str = "cuda"
-    seed: int = 42
-
-
 def create_data_sampler(
     data: xr.Dataset,
     edge_index: torch.Tensor,
@@ -347,6 +268,7 @@ def create_data_sampler(
             num_workers=workers,
             pin_memory=True,
             drop_last=True,
+            verbose=True,
         )
         return loader
     except Exception as error:
@@ -358,15 +280,14 @@ if __name__ == "__main__":
     # Load the configuration parameters and the input and output data
     config, data_train, data_test = load_config_and_data()
 
-    data_train_in: xr.Dataset
-    data_train_out: xr.Dataset
-    data_test_in: xr.Dataset
-    data_test_out: xr.Dataset
-    data_train_in, data_train_out = MyDataset(data_train, config["member_split"])
-
     try:
-        data_train_in, data_train_out = MyDataset(data_train, config["member_split"])
-        data_test_in, data_test_out = MyDataset(data_test, config["member_split"])
+        # TODO fix this ugly naming and difference from CNN and test/train meaning
+        data_train_set = MyDataset(data_train, config["member_split"])
+        data_train_in = data_train_set.data.isel(member=data_train_set.train_indices)
+        data_train_out = data_train_set.data.isel(member=data_train_set.test_indices)
+        data_test_set = MyDataset(data_test, config["member_split"])
+        data_test_in = data_test_set.data.isel(member=data_test_set.train_indices)
+        data_test_out = data_test_set.data.isel(member=data_test_set.test_indices)
     except IndexError as e:
         logger.exception("Error occurred while creating datasets: %s", e)
     try:
@@ -430,28 +351,28 @@ if __name__ == "__main__":
         logger.exception("Error occurred while creating data loaders: %s", e)
 
     try:
-        loss_fn: Union[
-            EnsembleVarianceRegularizationLoss, MaskedLoss, nn.MSELoss, nn.Module
-        ] = EnsembleVarianceRegularizationLoss(alpha=0.1)
+        # loss_fn: nn.CrossEntropyLoss = nn.CrossEntropyLoss()
+        loss_fn = nn.L1Loss()
 
-        if loss_fn == MaskedLoss:
+        if isinstance(loss_fn, MaskedLoss):
             # Create a mask that masks all cells that stay constant over all time steps
             variance = data_train.var(dim="time")
             # Create a mask that hides all data with zero variance
             mask = variance <= config["mask_threshold"]
             logger.info("Number of masked cells: %d", (mask[0].values == 1).sum())
             logger.info("Number of masked cells: %d", (mask[0].values == 1).sum())
+        else:
+            mask = None
     except (ValueError, TypeError) as e:
         logger.exception("Error occurred while creating loss function: %s", e)
+    artifact_path, experiment_name = setup_mlflow()
     try:
-        artifact_path, experiment_name = setup_mlflow()
-
         if config["retrain"]:
             gnn_config = GNNConfig(
                 nodes_in=nodes_in,
                 nodes_out=nodes_out,
-                in_channels=channels_in,
-                out_channels=channels_out,
+                channels_in=channels_in,
+                channels_out=channels_out,
                 hidden_feats=64,
             )
             model = GNNModel(gnn_config)
@@ -469,21 +390,26 @@ if __name__ == "__main__":
             with mlflow.start_run():
                 # Train the model Create a TrainingConfig object that contains both the
                 # local variables and the JSON parameters
-                config_train = TrainingConfig(  # pylint: disable=too-many-function-args
-                    loader_train_in=loader_train_in,
-                    loader_train_out=loader_train_out,
-                    optimizer=optimizer,
-                    scheduler=scheduler,
-                    loss_fn=loss_fn,
-                    mask=mask,
-                    num_epochs=config["epochs"],
-                    device=config["device"],
-                    seed=config["seed"],
+                config_train = (
+                    TrainingConfigGNN(  # pylint: disable=too-many-function-args
+                        loader_train_in=loader_train_in,
+                        loader_train_out=loader_train_out,
+                        optimizer=optimizer,
+                        scheduler=scheduler,
+                        loss_fn=loss_fn,
+                        mask=mask,
+                        epochs=config["epochs"],
+                        device=config["device"],
+                        seed=config["seed"],
+                    )
                 )
                 # Pass the TrainingConfig object to the train method
                 if torch.cuda.device_count() > 1:
+                    logger.info(
+                        "Using %d GPUs for Evaluation", torch.cuda.device_count()
+                    )
                     model = cast(GNNModel, nn.DataParallel(model).module)
-                    loss_fn = nn.DataParallel(loss_fn)
+                    loss_fn = loss_fn.to(config["device"])
                 model.train_with_configs(config_train)
 
         else:
@@ -500,7 +426,7 @@ if __name__ == "__main__":
         y_pred: List[torch.Tensor] = []
         # Evaluate the model on the test data
         # pylint: disable=R0801
-        config_eval = EvaluationConfig(
+        config_eval = EvaluationConfigGNN(
             loader_in=loader_test_in,
             loader_out=loader_test_out,
             loss_fn=loss_fn,
@@ -509,10 +435,12 @@ if __name__ == "__main__":
             seed=config["seed"],
         )
         if torch.cuda.device_count() > 1:
-            logger.info("Using %d GPUs", torch.cuda.device_count())
+            logger.info("Using %d GPUs for Training", torch.cuda.device_count())
             model = cast(GNNModel, nn.DataParallel(model).module)
+            loss_fn = loss_fn.to(config["device"])
         test_loss, y_pred = model.eval_with_configs(config_eval)
-        logger.info("Best model test loss: %.4f", test_loss)
+        # test_loss = test_loss.mean().item()
+        logger.info("Best model test loss: %f", test_loss)
     except (RuntimeError, ValueError) as e:
         logger.exception("Error occurred while evaluating model: %s", e)
     try:
@@ -522,12 +450,19 @@ if __name__ == "__main__":
             torch.cat(y_pred).numpy().reshape((np.array(data_test_out.values).shape)),
             dims=["time", "member", "height", "ncells"],
         )
-
+        logger.info(
+            "The shape of the raw model prediction: %s", torch.cat(y_pred).numpy().shape
+        )
+        logger.info("Reshaped into form: %s", y_pred_reshaped.shape)
         data_gif = {
             "y_pred_reshaped": y_pred_reshaped,
             "data_test": data_test,
         }
 
-        output_filename = create_animation(data_gif, member=0, preds="GNN")
+        for i in range(10):
+            member = random.randint(
+                0, data_test.sizes["member"] - config["member_split"] - 1
+            )
+            output_filename = create_animation(data_gif, member=member, preds="GNN")
     except (ValueError, TypeError) as e:
         logger.exception("Error occurred while creating animation: %s", e)
