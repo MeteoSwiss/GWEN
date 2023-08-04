@@ -23,7 +23,6 @@ from weathergraphnet.models import EvaluationConfigCNN
 from weathergraphnet.models import TrainingConfigCNN
 from weathergraphnet.models import UNet
 from weathergraphnet.utils import create_animation
-from weathergraphnet.utils import EnsembleVarRegLoss
 from weathergraphnet.utils import load_best_model
 from weathergraphnet.utils import load_config_and_data
 from weathergraphnet.utils import MaskedLoss
@@ -47,9 +46,11 @@ if __name__ == "__main__":
         dataset_test = MyDataset(data_test, config["member_split"])
         dataloader_test = DataLoader(dataset_test, config["batch_size"], shuffle=False)
 
-        loss_fn: Union[
-            EnsembleVarRegLoss, MaskedLoss, nn.MSELoss, nn.Module
-        ] = EnsembleVarRegLoss(alpha=0.1)
+        # loss_fn: Union[
+        #     EnsembleVarRegLoss, MaskedLoss, nn.MSELoss, nn.Module
+        # ] = EnsembleVarRegLoss(alpha=0.1)
+
+        loss_fn = nn.L1Loss()
 
         if isinstance(loss_fn, MaskedLoss):
             # Create a mask that masks all cells that stay constant over all time steps

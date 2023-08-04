@@ -31,5 +31,3 @@ loss: Incomplete
 train_acc: Incomplete
 val_acc: Incomplete
 tmp_test_acc: Incomplete
-best_val_acc = val_acc
-test_acc = tmp_test_acc

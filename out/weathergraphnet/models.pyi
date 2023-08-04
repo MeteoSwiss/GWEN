@@ -33,6 +33,7 @@ class TrainingConfigGNN(dict):
     epochs: int
     device: str
     seed: int
+
     def __init__(
         self,
         loader_train_in,
@@ -61,6 +62,7 @@ class GNNConfig(dict):
     channels_in: int
     channels_out: int
     hidden_feats: int
+
     def __init__(
         self, nodes_in, nodes_out, channels_in, channels_out, hidden_feats
     ) -> None: ...
@@ -74,6 +76,7 @@ class TrainingConfigCNN(dict):
     epochs: int
     device: str
     seed: int
+
     def __init__(
         self, dataloader, optimizer, scheduler, loss_fn, mask, epochs, device, seed
     ) -> None: ...
@@ -96,6 +99,7 @@ class BaseNet(nn.Module):
     batch_norm_layers: Incomplete
     maxpool: Incomplete
     upsample: Incomplete
+
     def __init__(
         self, channels_in: int, channels_out: int, hidden_size: int
     ) -> None: ...
@@ -119,6 +123,7 @@ class Decoder(BaseNet):
 class UNet(BaseNet):
     encoder: Incomplete
     decoder: Incomplete
+
     def __init__(
         self, channels_in: int, channels_out: int, hidden_size: int, device: str
     ) -> None: ...
