@@ -2,34 +2,47 @@
 # Standard library
 import os
 import re
-import socket
 from typing import List
-from typing import Pattern
 
 # Third-party
 import numcodecs  # type: ignore
 import xarray as xr
 
 # First-party
-from weathergraphnet.utils import setup_logger
+from weathergraphnet.logger import setup_logger
+from weathergraphnet.utils import load_config
 
-hostname: str = socket.gethostname()
-if "nid" in hostname:
-    SCRATCH: str = "/scratch/e1000/meteoswiss/scratch/sadamov/"
-else:
-    SCRATCH = "/scratch/sadamov/"
+config_dict = load_config()
 
-data_path: str = f"{SCRATCH}/icon/icon-nwp/cpu/experiments/"
-filename_regex: str = r"atmcirc-straka_93_(.*)DOM01_ML_20080801T000000Z.nc"
-filename_pattern: Pattern[str] = re.compile(filename_regex)
-zarr_path: str = f"{SCRATCH}/icon/icon-nwp/cpu/experiments/data_combined_2.zarr"
-folders: List[str] = os.listdir(data_path)
-compressor = numcodecs.Zlib(level=1)
+config_dict.update(
+    {
+        "folders": os.listdir(config_dict["data_path"]),
+        "filename_pattern": re.compile(config_dict["filename_regex"]),
+        "compressor": numcodecs.Zlib(level=config_dict["zlib_compression_level"]),
+    }
+)
 
 logger = setup_logger()
 
 
-def load_data() -> None:
+def append_or_create_zarr(data_out: xr.Dataset, config: dict) -> None:
+    """Append data to an existing Zarr archive or create a new one."""
+    if os.path.exists(config["zarr_path"]):
+        data_out.to_zarr(
+            store=config["zarr_path"],
+            mode="a",
+            consolidated=True,
+            append_dim="member",
+        )
+    else:
+        data_out.to_zarr(
+            config["zarr_path"],
+            mode="w",
+            consolidated=True,
+        )
+
+
+def load_data(config: dict) -> None:
     """Load weather data from NetCDF files and store it in a Zarr archive.
 
     The data is assumed to be in a specific directory structure and file naming
@@ -45,65 +58,40 @@ def load_data() -> None:
         None
 
     """
-    for folder in folders:
+    for folder in config["folders"]:
         if folder.startswith("atmcirc-straka_93_"):
-            file_path: str = os.path.join(data_path, folder)
+            file_path: str = os.path.join(config["data_path"], folder)
             files: List[str] = os.listdir(file_path)
             for file in files:
                 try:
-                    match = filename_pattern.match(file)
-                    if match:
-                        data: xr.Dataset = xr.open_dataset(
-                            os.path.join(file_path, file), engine="netcdf4"
-                        )
-                        data = data.assign_coords(member=match.group(1))
-                        data = data.expand_dims({"member": 1})
-                        data = data.chunk(
-                            chunks={
-                                "time": 32,
-                                "member": -1,
-                                "height": -1,
-                                "height_2": -1,
-                                "height_3": -1,
-                            },
-                            compressor=compressor,
-                        )
-                        append_or_create_zarr(data)
-                        print(f"Loaded {file}", flush=True)
-                except FileNotFoundError as e:
-                    handle_file_not_found_error(file, e)
-                except ValueError as e:
-                    handle_invalid_file_format_error(file, e)
+                    match = config["filename_pattern"].match(file)
+                    if not match:
+                        continue
+
+                    data: xr.Dataset = xr.open_dataset(
+                        os.path.join(file_path, file), engine="netcdf4"
+                    )
+
+                    # Specify the encoding for theta_v
+                    if "theta_v" in data:
+                        data["theta_v"].encoding = {"compressor": config["compressor"]}
+
+                    data = data.assign_coords(member=match.group(1))
+                    data = data.expand_dims({"member": 1})
+                    data = data.chunk(
+                        chunks={
+                            "time": 32,
+                            "member": -1,
+                            "height": -1,
+                            "height_2": -1,
+                            "height_3": -1,
+                        }
+                    )
+                    append_or_create_zarr(data, config)
+                    logger.info("Loaded %s", file)
+                except (FileNotFoundError, OSError) as e:
+                    logger.error("Error loading %s: %s", file, e)
 
 
-def append_or_create_zarr(data: xr.Dataset) -> None:
-    if os.path.exists(zarr_path):
-        data.to_zarr(
-            store=zarr_path,
-            mode="a",
-            encoding={"theta_v": {"compressor": compressor}},
-            consolidated=True,
-            append_dim="member",
-        )
-    else:
-        data.to_zarr(
-            zarr_path,
-            mode="w",
-            encoding={"theta_v": {"compressor": compressor}},
-            consolidated=True,
-        )
-
-
-def handle_file_not_found_error(file: str, e: Exception) -> None:
-    """Handle the case when a file is not found."""
-    logger.error("File not found: %s. %s", file, str(e))
-    raise e
-
-
-def handle_invalid_file_format_error(file: str, e: Exception) -> None:
-    """Handle the case when a file has an invalid format."""
-    logger.error("Invalid file format: %s. %s", file, str(e))
-    raise e
-
-
-load_data()
+if __name__ == "__main__":
+    load_data(config_dict)
