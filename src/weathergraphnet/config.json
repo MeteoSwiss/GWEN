@@ -7,8 +7,13 @@
     "num_workers": 4,
     "hidden_feats": 1024,
     "mask_threshold": 1e-6,
-    "lr": 0.001,
-    "epochs": 10,
+    "lr": 0.00001,
+    "epochs": 1,
     "seed": 42,
-    "retrain": true
+    "retrain": true,
+    "device": "cuda",
+    "data_path": "/scratch/sadamov/icon/icon-nwp/cpu/experiments/",
+    "filename_regex": "atmcirc-straka_93_(.*)DOM01_ML_20080801T000000Z.nc",
+    "zarr_path": "/scratch/sadamov/icon/icon-nwp/cpu/experiments/data_combined_2.zarr",
+    "zlib_compression_level": 1
 }
