@@ -77,7 +77,6 @@ known_first_party = [
 
 [tool.mypy]
 
-mypy_path = "/users/sadamov/pyprojects/weathergraphnet/out/"
 [[tool.mypy.overrides]]
 plugins = "pytest_mypy_plugins"
 # Note: Only globally ignore missing imports as a matter of last resort!
