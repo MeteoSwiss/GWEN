@@ -113,3 +113,4 @@ venv_*/
 output
 data
 mlruns
+src/weathergraphnet/example_gnn.py
