@@ -1,8 +1,13 @@
+"""Tests for the weathergraphnet.utils module."""
+# Standard library
 import json
 import os
 
+# Third-party
 import pytest
 import xarray as xr
+
+# First-party
 from weathergraphnet.models import GNNModel
 from weathergraphnet.models import UNet
 from weathergraphnet.utils import load_best_model
@@ -14,18 +19,19 @@ from weathergraphnet.utils import setup_mlflow
 @pytest.fixture(scope="module")
 def config():
     with open(
-        os.path.join(os.path.dirname(__file__),
-                     "../../src/weathergraphnet/config.json"),
+        os.path.join(
+            os.path.dirname(__file__), "../../src/weathergraphnet/config.json"
+        ),
         "r",
         encoding="UTF-8",
     ) as f:
-        config = json.load(f)
-    return config
+        config_json = json.load(f)
+    return config_json
 
 
 @pytest.fixture(scope="module")
-def data(config):
-    data_train, data_test = load_data(config)
+def data(config_json):
+    data_train, data_test = load_data(config_json)
     return data_train, data_test
 
 
@@ -34,37 +40,37 @@ def experiment_name():
     return "WGN"
 
 
-def test_load_best_model(experiment_name):
+def test_load_best_model(exp_name):
     with pytest.raises(ValueError):
         load_best_model("nonexistent_experiment")
     with pytest.raises(FileNotFoundError):
-        load_best_model(experiment_name)
-    model = load_best_model(experiment_name)
+        load_best_model(exp_name)
+    model = load_best_model(exp_name)
     assert isinstance(model, (GNNModel, UNet))
 
 
-def test_load_config_and_data(config):
+def test_load_config_and_data(config_json):
     with pytest.raises(FileNotFoundError):
         load_config_and_data()
     with pytest.raises(ValueError):
-        config["coarsen"] = -1
+        config_json["coarsen"] = -1
         load_config_and_data()
-    config, data_train, data_test = load_config_and_data()
-    assert isinstance(config, dict)
+    config_json, data_train, data_test = load_config_and_data()
+    assert isinstance(config_json, dict)
     assert isinstance(data_train, xr.Dataset)
     assert isinstance(data_test, xr.Dataset)
 
 
-def test_load_data(config, data):
+def test_load_data(config_json, data_load):
     with pytest.raises(FileNotFoundError):
-        config["data_train"] = "nonexistent_file.zarr"
-        load_data(config)
-    data_train, data_test = data
+        config_json["data_train"] = "nonexistent_file.zarr"
+        load_data(config_json)
+    data_train, data_test = data_load
     assert isinstance(data_train, xr.Dataset)
     assert isinstance(data_test, xr.Dataset)
 
 
 def test_setup_mlflow():
-    artifact_path, experiment_name = setup_mlflow()
+    artifact_path, exp_name = setup_mlflow()
     assert isinstance(artifact_path, str)
-    assert isinstance(experiment_name, str)
+    assert isinstance(exp_name, str)

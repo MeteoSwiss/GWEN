@@ -1,8 +1,13 @@
+"""Tests for the models module."""
+# Standard library
 import unittest
 from unittest import mock
 
+# Third-party
 import torch
 from torch import Tensor
+
+# First-party
 from weathergraphnet.models import EvaluationConfigCNN
 from weathergraphnet.models import EvaluationConfigGNN
 from weathergraphnet.models import GNNConfig
@@ -31,7 +36,8 @@ class TestGNNModel(unittest.TestCase):
             "nodes_out": 10,
             "channels_in": 10,
             "channels_out": 10,
-            "hidden_feats": 10, }
+            "hidden_feats": 10,
+        }
 
         configs_test = {
             "loader_in": [torch.randn(10, 5) for _ in range(3)],
@@ -39,7 +45,7 @@ class TestGNNModel(unittest.TestCase):
             "loss_fn": torch.nn.MSELoss(),
             "mask": Tensor | None,
             "device": "cuda",
-            "seed": 42
+            "seed": 42,
         }
 
         self.configs_train = TrainingConfigGNN(**configs_train)
@@ -50,8 +56,10 @@ class TestGNNModel(unittest.TestCase):
         model = GNNModel(self.configs_gnn)
         model.conv_layers = mock.MagicMock()
         model.pool_layer = mock.MagicMock()
-        model.pool_layer.return_value = (torch.randn(
-            10, 5), torch.tensor([0, 1, 1, 2, 3, 0, 3, 2, 1, 0]))
+        model.pool_layer.return_value = (
+            torch.randn(10, 5),
+            torch.tensor([0, 1, 1, 2, 3, 0, 3, 2, 1, 0]),
+        )
         model.activation = torch.nn.ReLU()
 
         model.train_with_configs(self.configs_train)
@@ -65,8 +73,10 @@ class TestGNNModel(unittest.TestCase):
         model = GNNModel(self.configs_gnn)
         model.conv_layers = mock.MagicMock()
         model.pool_layer = mock.MagicMock()
-        model.pool_layer.return_value = (torch.randn(
-            10, 5), torch.tensor([0, 1, 1, 2, 3, 0, 3, 2, 1, 0]))
+        model.pool_layer.return_value = (
+            torch.randn(10, 5),
+            torch.tensor([0, 1, 1, 2, 3, 0, 3, 2, 1, 0]),
+        )
         model.activation = torch.nn.ReLU()
 
         self.configs_test.loader_in = [torch.randn(10, 5) for _ in range(3)]
@@ -80,7 +90,7 @@ class TestGNNModel(unittest.TestCase):
 
 
 class TestUNet(unittest.TestCase):
-    #TODO test with different input shapes
+    # TODO test with different input shapes
     def setUp(self):
         self.channels_in = 100
         self.channels_out = 25
@@ -92,8 +102,9 @@ class TestUNet(unittest.TestCase):
 
     def test_forward_pass(self):
         model = UNet(self.channels_in, self.channels_out, self.hidden_size)
-        with mock.patch.object(model, "encoder") as mock_encoder, \
-                mock.patch.object(model, "decoder") as mock_decoder:
+        with mock.patch.object(model, "encoder") as mock_encoder, mock.patch.object(
+            model, "decoder"
+        ) as mock_decoder:
             mock_encoder.return_value = (
                 torch.randn(self.batch_size, self.hidden_size, 128, 128),
                 torch.randn(self.batch_size, self.hidden_size * 2, 64, 64),
@@ -108,7 +119,9 @@ class TestUNet(unittest.TestCase):
         model = UNet(self.channels_in, self.channels_out, self.hidden_size)
         configs = {
             "epochs": 2,
-            "dataloader": [(torch.randn(self.input_shape), torch.randn(self.output_shape))],
+            "dataloader": [
+                (torch.randn(self.input_shape), torch.randn(self.output_shape))
+            ],
             "device": "cuda",
             "optimizer": torch.optim.Adam(model.parameters()),
             "scheduler": None,
@@ -122,7 +135,9 @@ class TestUNet(unittest.TestCase):
     def test_eval_with_configs(self):
         model = UNet(self.channels_in, self.channels_out, self.hidden_size)
         configs = {
-            "dataloader": [(torch.randn(self.input_shape), torch.randn(self.output_shape))],
+            "dataloader": [
+                (torch.randn(self.input_shape), torch.randn(self.output_shape))
+            ],
             "device": "cuda",
             "loss_fn": torch.nn.MSELoss(),
             "mask": None,

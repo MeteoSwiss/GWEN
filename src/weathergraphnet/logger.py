@@ -1,11 +1,14 @@
 """Provide logging for the weathergraphnet package."""
+# Standard library
 import logging
 
+# Third-party
 from torch import distributed as dist
 
 # Create a logger object
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+
 
 def setup_logger() -> logging.Logger:
     """Set up a logger for the weathergraphnet package.
@@ -17,7 +20,6 @@ def setup_logger() -> logging.Logger:
     messages with level INFO and above to the file.
 
     """
-
     # If handlers have already been added to the logger, return it
     if logger.hasHandlers():
         return logger
@@ -37,7 +39,8 @@ def setup_logger() -> logging.Logger:
 
     # Create a formatter and add it to the handlers
     formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
     console_handler.setFormatter(formatter)
     file_handler.setFormatter(formatter)
 
