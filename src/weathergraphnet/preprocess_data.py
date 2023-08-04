@@ -18,7 +18,7 @@ import xarray as xr
 from pyprojroot import here
 
 # First-party
-from weathergraphnet.utils import setup_logger
+from weathergraphnet.logger import setup_logger
 
 logger = setup_logger()
 
@@ -51,13 +51,13 @@ def split_data(
 
         # Select the test samples
         test_indices = indices[:n_test_samples]
-        test_data = data.isel(time=test_indices)
+        data_split_test = data.isel(time=test_indices)
 
         # Select the training samples
         train_indices = indices[n_test_samples:]
-        train_data = data.isel(time=train_indices)
+        data_split_train = data.isel(time=train_indices)
 
-        return train_data, test_data
+        return data_split_train, data_split_test
 
     except Exception as error:
         logger.exception("Error occurred while splitting data: %s", str(error))
@@ -86,19 +86,19 @@ def normalize_data(
     """
     try:
         if method == "mean":
-            center: np.floating = np.array(data_train_raw.mean().values)[0]
-            scale: np.floating = np.array(data_train_raw.std().values)[0]
+            center: np.floating = np.floating(np.array(data_train_raw.mean().values))
+            scale: np.floating = np.floating(np.array(data_train_raw.std().values))
 
         elif method == "median":
-            center = np.nanmedian(data_train_raw)
-            centered_ds = data_train_raw - center
-            scale = np.nanmedian(np.abs(centered_ds))
+            center = np.nanmedian(np.array(data_train_raw.values)).astype(np.floating)
+            centered_ds = np.array(data_train_raw.values) - center
+            scale = np.nanmedian(np.abs(centered_ds)).astype(np.floating)
 
         else:
             raise ValueError("Invalid method. Must be 'mean' or 'median'.")
 
-        data_train_scaled = (data_train_raw - center) / scale
-        data_test_scaled = (data_test_raw - center) / scale
+        data_train_scaled = (np.array(data_train_raw.values) - center) / scale
+        data_test_scaled = (np.array(data_test_raw.values) - center) / scale
 
         with open(str(here()) + "/data/scaling.txt", "w", encoding="utf-8") as f:
             f.write("center: " + str(center) + "\n" + "scale: " + str(scale))
@@ -128,11 +128,13 @@ try:
     # Check for missing data
     if np.isnan(data_theta.to_numpy()).any():
         logger.warning("Data contains missing values.")
-
-    # Interpolate missing data
-    data_theta = data_theta.interpolate_na(
-        dim="x", method="linear", fill_value="extrapolate"
-    )
+        # Interpolate missing data
+        assert (
+            "time" in data_theta.dims
+        ), "The dimension 'time' does not exist in the dataset."
+        data_theta = data_theta.interpolate_na(
+            dim="time", method="linear", fill_value="extrapolate"
+        )
 
 except Exception as e:
     logger.exception("Error occurred while importing data: %s", str(e))
