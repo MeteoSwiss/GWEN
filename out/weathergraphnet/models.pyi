@@ -12,8 +12,8 @@ from torch import optim as optim
 from torch.optim import Adam
 from torch.optim.lr_scheduler import CyclicLR
 from torch.optim.lr_scheduler import StepLR
-from torch_geometric.data import Data as Data
-from torch_geometric.loader import DataLoader as DataLoader
+from torch_geometric.data import Data as Data  # type: ignore
+from torch_geometric.loader import DataLoader as DataLoader  # type: ignore
 
 # First-party
 from weathergraphnet.logger import setup_logger as setup_logger
@@ -105,9 +105,7 @@ class Encoder(BaseNet):
     def __init__(
         self, channels_in: int, channels_out: int, hidden_size: int
     ) -> None: ...
-    def forward(
-        self, x: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]: ...
+    def forward(self, x): ...
 
 class Decoder(BaseNet):
     def __init__(
@@ -116,9 +114,7 @@ class Decoder(BaseNet):
     def crop(
         self, encoder_layer: torch.Tensor, decoder_layer: torch.Tensor
     ) -> torch.Tensor: ...
-    def forward(
-        self, x: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
-    ) -> torch.Tensor: ...
+    def forward(self, x): ...
 
 class UNet(BaseNet):
     encoder: Incomplete
@@ -126,7 +122,7 @@ class UNet(BaseNet):
     def __init__(
         self, channels_in: int, channels_out: int, hidden_size: int, device: str
     ) -> None: ...
-    def forward(self, x: torch.Tensor) -> torch.Tensor: ...
+    def forward(self, x): ...
     def train_with_configs(self, configs_train_cnn: TrainingConfigCNN) -> None: ...
     def eval_with_configs(
         self, configs_eval_cnn: EvaluationConfigCNN

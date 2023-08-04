@@ -17,7 +17,7 @@ from torch.optim.lr_scheduler import StepLR
 from torch_geometric.data import Data  # type: ignore  # type: ignore
 from torch_geometric.loader import DataLoader  # type: ignore
 from torch_geometric.nn import GCNConv  # type: ignore
-from torch_geometric.nn import TopKPooling  # type: ignore
+from torch_geometric.nn import TopKPooling
 
 # First-party
 from weathergraphnet.logger import setup_logger
@@ -554,6 +554,10 @@ class UNet(BaseNet):
         print(configs_train_cnn, flush=True)
 
         try:
+            device = configs_train_cnn.device
+            if configs_train_cnn.mask is not None:
+                configs_train_cnn.mask = configs_train_cnn.mask.to(device)
+            model = self.to(configs_train_cnn.device)
             for epoch in range(configs_train_cnn.epochs):
                 print(f"Epoch: {epoch}", flush=True)
                 running_loss = 0.0
@@ -562,16 +566,13 @@ class UNet(BaseNet):
                     input_data = input_data.to(configs_train_cnn.device)
                     target_data = target_data.to(configs_train_cnn.device)
                     configs_train_cnn.optimizer.zero_grad()
-                    print(configs_train_cnn.device)
-                    print(type(self))
-                    model = self.to(configs_train_cnn.device)
-                    print(type(model))
+                    # pylint: disable=not-callable
                     output = model(input_data)
                     if configs_train_cnn.mask is not None:
                         loss = configs_train_cnn.loss_fn(
                             output,
                             target_data,
-                            configs_train_cnn.mask.to(configs_train_cnn.device),
+                            configs_train_cnn.mask,
                         )
                     else:
                         loss = configs_train_cnn.loss_fn(output, target_data)
@@ -601,20 +602,24 @@ class UNet(BaseNet):
 
         """
         try:
+            device = configs_eval_cnn.device
+            if configs_eval_cnn.mask is not None:
+                configs_eval_cnn.mask = configs_eval_cnn.mask.to(device)
+            model = self.to(configs_eval_cnn.device)
             self.eval()
             with torch.no_grad():
                 loss: float = 0.0
                 y_preds: List[torch.Tensor] = []
                 for input_data, target_data in configs_eval_cnn.dataloader:
-                    input_data = input_data.to(configs_eval_cnn.device)
-                    target_data = target_data.to(configs_eval_cnn.device)
-                    model = self.to(configs_eval_cnn.device)
+                    input_data = input_data.to(device)
+                    target_data = target_data.to(device)
+                    # pylint: disable=not-callable
                     output = model(input_data)
                     if configs_eval_cnn.mask is not None:
                         loss += configs_eval_cnn.loss_fn(
                             output,
                             target_data,
-                            configs_eval_cnn.mask.to(configs_eval_cnn.device),
+                            configs_eval_cnn.mask,
                         )
                     else:
                         loss += configs_eval_cnn.loss_fn(output, target_data)
@@ -884,6 +889,10 @@ class GNNModel(torch.nn.Module):
         torch.manual_seed(configs_train_gnn.seed)
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(configs_train_gnn.seed)
+        device = configs_train_gnn.device
+        model = self.to(configs_train_gnn.device)
+        if configs_train_gnn.mask is not None:
+            configs_train_gnn.mask = configs_train_gnn.mask.to(device)
 
         # Train the GNN model
         for epoch in range(configs_train_gnn.epochs):
@@ -891,17 +900,17 @@ class GNNModel(torch.nn.Module):
             for data_in, data_out in zip(
                 configs_train_gnn.loader_train_in, configs_train_gnn.loader_train_out
             ):
-                data_in = data_in.to(configs_train_gnn.device)
-                data_out = data_out.to(configs_train_gnn.device)
+                data_in = data_in.to(device)
+                data_out = data_out.to(device)
                 configs_train_gnn.optimizer.zero_grad()
-                model = self.to(configs_train_gnn.device)
+                # pylint: disable=not-callable
                 output = model(data_in)
                 if configs_train_gnn.mask is not None:
                     try:
                         loss = configs_train_gnn.loss_fn(
                             output,
                             data_out.x,
-                            configs_train_gnn.mask.to(configs_train_gnn.device),
+                            configs_train_gnn.mask,
                         )
                     except Exception as e:
                         logger.error("Error occurred while calculating loss: %s", e)
@@ -937,22 +946,24 @@ class GNNModel(torch.nn.Module):
 
         """
         self.eval()
+        device = configs_eval_gnn.device
+        if configs_eval_gnn.mask is not None:
+            configs_eval_gnn.mask = configs_eval_gnn.mask.to(device)
+        model = self.to(configs_eval_gnn.device)
         with torch.no_grad():
             loss: float = 0.0
             y_preds: List[torch.Tensor] = []
             for data_in, data_out in zip(
                 configs_eval_gnn.loader_in, configs_eval_gnn.loader_out
             ):
-                data_in = data_in.to(configs_eval_gnn.device)
-                data_out = data_out.to(configs_eval_gnn.device)
-                model = self.to(configs_eval_gnn.device)
+                data_in = data_in.to(device)
+                data_out = data_out.to(device)
+                # pylint: disable=not-callable
                 output = model(data_in)
                 if configs_eval_gnn.mask is not None:
                     try:
                         loss += configs_eval_gnn.loss_fn(
-                            output,
-                            data_out.x,
-                            configs_eval_gnn.mask.to(configs_eval_gnn.device),
+                            output, data_out.x, configs_eval_gnn.mask
                         )
                     except Exception as e:
                         logger.error("Error occurred while calculating loss: %s", e)

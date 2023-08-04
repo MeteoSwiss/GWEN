@@ -4,7 +4,7 @@ from typing import List
 from typing import Tuple
 
 # Third-party
-import mlflow
+import mlflow  # type: ignore
 import numpy as np
 import xarray as xr
 from _typeshed import Incomplete

@@ -409,7 +409,6 @@ if __name__ == "__main__":
                         "Using %d GPUs for Evaluation", torch.cuda.device_count()
                     )
                     model = cast(GNNModel, nn.DataParallel(model).module)
-                    loss_fn = loss_fn.to(config["device"])
                 model.train_with_configs(config_train)
 
         else:
@@ -437,7 +436,6 @@ if __name__ == "__main__":
         if torch.cuda.device_count() > 1:
             logger.info("Using %d GPUs for Training", torch.cuda.device_count())
             model = cast(GNNModel, nn.DataParallel(model).module)
-            loss_fn = loss_fn.to(config["device"])
         test_loss, y_pred = model.eval_with_configs(config_eval)
         # test_loss = test_loss.mean().item()
         logger.info("Best model test loss: %f", test_loss)

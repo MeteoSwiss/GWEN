@@ -92,8 +92,8 @@ if __name__ == "__main__":
                 if torch.cuda.device_count() > 1:
                     logger.info("Using %d GPUs for Training", torch.cuda.device_count())
                     model = cast(UNet, nn.DataParallel(model).module)
-                    loss_fn = loss_fn.to(config["device"])
-                model.train_with_configs(config_train)
+
+                model.train_with_configs(config_train)  # type: ignore
         else:
             # Load the best model from the most recent MLflow run
             model = load_best_model(experiment_name)
@@ -111,9 +111,9 @@ if __name__ == "__main__":
     )
     if torch.cuda.device_count() > 1:
         logger.info("Using %d GPUs for Evaluation", torch.cuda.device_count())
+
         model = cast(UNet, nn.DataParallel(model).module)
-        loss_fn = loss_fn.to(config["device"])
-    test_loss, y_pred = model.eval_with_configs(config_eval)
+    test_loss, y_pred = model.eval_with_configs(config_eval)  # type: ignore [operator]
     # if isinstance(loss_fn, nn.CrossEntropyLoss):
     # test_loss = test_loss.mean().item()
     logger.info("Best model test loss: %4f", test_loss)
