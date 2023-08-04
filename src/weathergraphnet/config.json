@@ -2,7 +2,7 @@
     "data_train": "/data/data_train.zarr",
     "data_test": "/data/data_test.zarr",
     "member_split": 100,
-    "coarsen": 8,
+    "coarsen": 1,
     "batch_size": 168,
     "num_workers": 4,
     "hidden_feats": 1024,

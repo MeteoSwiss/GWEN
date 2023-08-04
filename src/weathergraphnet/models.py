@@ -63,7 +63,6 @@ class TrainingConfigGNN(dict):  # pylint: disable=too-many-instance-attributes
     loss_fn: Union[
         nn.Module,
         nn.MSELoss,
-        nn.DataParallel,
     ]
     mask: Optional[torch.Tensor] = None
     epochs: int = 10
@@ -90,7 +89,6 @@ class EvaluationConfigGNN(dict):
     loss_fn: Union[
         nn.Module,
         nn.MSELoss,
-        nn.DataParallel,
     ]
     mask: Optional[torch.Tensor] = None
     device: str = "cuda"
@@ -139,7 +137,6 @@ class TrainingConfigCNN(dict):  # pylint: disable=too-many-instance-attributes
     loss_fn: Union[
         nn.Module,
         nn.MSELoss,
-        nn.DataParallel,
     ]
     mask: Optional[torch.Tensor] = None
     epochs: int = 10
@@ -166,7 +163,6 @@ class EvaluationConfigCNN(dict):
     loss_fn: Union[
         nn.Module,
         nn.MSELoss,
-        nn.DataParallel,
     ]
     mask: Optional[torch.Tensor] = None
     device: str = "cuda"
