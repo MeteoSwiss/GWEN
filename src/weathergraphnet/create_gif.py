@@ -13,11 +13,13 @@ The module contains the following functions:
 
 # Standard library
 import os
+import random
 import sys
 from typing import Callable
 from typing import Tuple
 
 # Third-party
+import click
 import matplotlib.pyplot as plt
 import xarray as xr
 from matplotlib import animation
@@ -26,7 +28,7 @@ from matplotlib.image import AxesImage
 from pyprojroot import here
 
 # First-party
-from weathergraphnet.utils import setup_logger
+from weathergraphnet.logger import setup_logger
 
 logger = setup_logger()
 
@@ -45,10 +47,15 @@ def get_member_parts(nc_file: str) -> Tuple[str, ...]:
 
     """
     try:
-        filename_parts = os.path.splitext(os.path.basename(nc_file))[0].split("_")
+        if nc_file in ".nc":
+            filename_parts = os.path.splitext(os.path.basename(nc_file))[0].split("_")[
+                2:5
+            ]
+        else:
+            filename_parts = nc_file.split("_")[:-1]
     except IndexError:
-        print("Error in getting member parts, check your file!")
-    return tuple(filename_parts[2:5])
+        logger.info("Error in getting member parts, check your file!")
+    return tuple(filename_parts)
 
 
 def get_var_min_max(var: xr.DataArray) -> Tuple[float, float]:
@@ -64,44 +71,6 @@ def get_var_min_max(var: xr.DataArray) -> Tuple[float, float]:
 
     """
     return float(var.min()), float(var.max())
-
-
-def create_animation(input_file: str, var_name: str) -> None:
-    """Create an animated gif from a NetCDF or Zarr file using matplotlib.
-
-    Args:
-        input_file (str): The path to the input file.
-        var_name (str): The name of the variable to plot.
-
-    """
-    # Open the input file
-    ds = open_input_file(input_file)
-
-    for member in ds.member.values:
-        # Create a new figure object
-        fig, ax = plt.subplots()
-
-        # Select the variable for the current member
-        var = select_variable(ds, var_name, member)
-
-        # Plot the first time step of the variable
-        im = plot_first_time_step(var, ax)
-
-        # Create a title for the plot
-        member_name = get_member_name(input_file)
-        plt.title(f"Var: {var_name}; Time: 0 s\n{member_name}")
-
-        # Define the update function for the animation
-        update_func = create_update_function(im, var, member_name, var_name)
-
-        # Create the animation object
-        ani = create_animation_object(fig, update_func, var.shape[0])
-
-        # Save the animation as a gif
-        save_animation(ani, var_name, member)
-
-        # Close the figure object
-        plt.close()
 
 
 def open_input_file(input_file: str) -> xr.Dataset:
@@ -129,7 +98,7 @@ def open_input_file(input_file: str) -> xr.Dataset:
     return ds
 
 
-def select_variable(ds: xr.Dataset, var_name: str, member: str) -> xr.DataArray:
+def select_variable(ds: xr.Dataset, var_name: str, member: int) -> xr.DataArray:
     """Select a variable from a dataset.
 
     Args:
@@ -145,7 +114,7 @@ def select_variable(ds: xr.Dataset, var_name: str, member: str) -> xr.DataArray:
 
     """
     try:
-        var = ds[var_name].sel(member=member)
+        var = ds[var_name].isel(member=member)
     except KeyError:
         logger.error("Variable %s not found in the dataset", var_name)
         raise
@@ -182,7 +151,7 @@ def get_member_name(input_file: str) -> str:
     member_parts = get_member_parts(input_file)
     member_name = " ".join(
         [
-            f"Temp: {part.replace('.0', '')} K;"
+            f"Temp: {part.replace('.0', '')} °C;"
             if i == 0
             else f"Height: {part.replace('.0', '')} m;"
             if i == 1
@@ -238,95 +207,111 @@ def create_animation_object(
     return ani
 
 
-def save_animation(ani: animation.FuncAnimation, var_name: str, member: str) -> None:
+def save_animation(ani: animation.FuncAnimation, output_filename: str) -> None:
     """Save the animation as a gif.
 
     Args:
         ani (animation.FuncAnimation): The animation object to save.
-        var_name (str): The name of the variable being plotted.
-        member (str): The member being plotted.
+        output_filename (str): The path to save the animation to.
 
     """
-    output_filename = f"{here()}/output/{var_name}/animation_member_{member}.gif"
     try:
         ani.save(output_filename, writer="imagemagick", dpi=100)
     except RuntimeError as error:
         logger.error("Error in saving output file: %s", error)
 
 
-def main(input_file: str, var_name: str) -> None:
+# pylint: disable=too-many-locals
+def main(input_file: str, var_name: str, out_dir: str) -> None:
     """Create the animation.
 
     Args:
         input_file (str): The path to the input file.
         var_name (str): The name of the variable to plot.
+        out_dir (str): The path to the output directory.
 
     """
     # Create the output directory if it doesn't exist
-    output_dir = f"{here()}/output/{var_name}"
-    try:
-        os.makedirs(output_dir, exist_ok=True)
-    except FileExistsError as error:
-        logger.error("Error in creating output directory: %s", error)
+    print("Entered main function")
+    os.makedirs(out_dir, exist_ok=True)
 
     # Open the dataset
     try:
-        ds = xr.open_dataset(input_file)
+        ds = xr.open_dataset(input_file).sortby("time", ascending=True)
     except ValueError as error:
         logger.error("Error in opening the file: %s", error)
 
-    # Select the variable
-    try:
-        member = get_member_name(input_file)
-        var = select_variable(ds, var_name, member)
-    except KeyError as error:
-        logger.error("Error in selecting the variable: %s", error)
+    # Select the variable and member
+    random_mode = False
+    for i in range(len(ds.member)):
+        try:
+            if random_mode:
+                member = random.randint(0, len(ds.member) - 1)
+            else:
+                member = i
+            var = select_variable(ds, var_name, member=member)
+            member_str = get_member_name(ds.member[member].item())
+        except KeyError as error:
+            logger.error("Error in selecting the variable: %s", error)
 
-    # Create the figure and plot the first time step
-    fig, ax = plt.subplots()
-    im = plot_first_time_step(var, ax)
+        # Create the figure and plot the first time step
+        fig, ax = plt.subplots()
+        im = plot_first_time_step(var, ax)
 
-    # Create the update function and animation object
-    update_func = create_update_function(im, var, member, var_name)
-    num_frames = len(var.time)
-    ani = create_animation_object(fig, update_func, num_frames)
+        # Create the update function and animation object
+        update_func = create_update_function(im, var, member_str, var_name)
+        num_frames = len(var.time)
+        ani = create_animation_object(fig, update_func, num_frames)
 
-    # Save the animation
-    try:
-        save_animation(ani, var_name, member)
-    except RuntimeError as error:
-        logger.error("Error in saving the animation: %s", error)
+        member_filename = member_str.replace(" ", "_").lower()
+        # Save the animation
+        try:
+            logger.info("Saving animation for member %s", member_filename)
+            save_animation(ani, f"{out_dir}/animation_{str(member_filename)}_ICON.gif")
+        except RuntimeError as error:
+            logger.error("Error in saving the animation: %s", error)
 
 
 if __name__ == "__main__":
-    if sys.stdin.isatty():
-        # Third-party
-        import click
+    if len(sys.argv) > 1:
 
         @click.command()
         @click.option(
-            "--input-file",
+            "--input_file_cli",
             type=click.Path(exists=True),
-            default=str(here()) + "/data/data_combined.zarr",
+            default=str(here()) + "/data/data_test.zarr",
             help="The path to the input file.",
         )
         @click.option(
-            "--var-name",
+            "--var_name_cli",
             type=str,
             default="theta_v",
             help="The name of the variable to plot.",
         )
-        def cli(input_file: str, var_name: str) -> None:
+        @click.option(
+            "--output_dir_cli",
+            type=click.Path(exists=True),
+            default=str(here()) + "/output",
+            help="The path to the output directory.",
+        )
+        def cli(input_file_cli: str, var_name_cli: str, output_dir_cli: str) -> None:
+            print("Entered cli function")
             try:
-                main(input_file, var_name)
+                main(input_file_cli, var_name_cli, output_dir_cli)
             except FileNotFoundError as e:
                 logger.error("Error: %s. Please check the input file path.", e)
+
+        # pylint: disable=no-value-for-parameter
+        cli()
 
     else:
         in_file = (
             input("Enter the path to the input file: ")
-            or str(here()) + "/data/data_combined.zarr"
+            or str(here()) + "/data/data_test.zarr"
         )
         in_var = input("Enter the name of the variable to plot: ") or "theta_v"
+        out_directory = (
+            input("Enter the path to the output directory: ") or str(here()) + "/output"
+        )
 
-        main(in_file, in_var)
+        main(in_file, in_var, out_directory)
