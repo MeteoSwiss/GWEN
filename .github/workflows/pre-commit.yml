@@ -28,7 +28,7 @@ jobs:
         show-channel-urls: true
     - name: Create env from unpinned reqs
       run: |
-        conda env create --name dev_env --file requirements/requirements.yml
+        conda env create --name dev_env --file requirements/requirements_nocuda.yml
     - name: Install project into env
       run: |
         conda run --name dev_env pip install --no-deps .
