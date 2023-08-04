@@ -2,7 +2,7 @@
 
 Classes:
     CRPSLoss: Continuous Ranked Probability Score (CRPS) loss function.
-    EnsembleVarianceRegularizationLoss: Ensemble variance regularization loss function.
+    EnsembleVarRegLoss: Ensemble variance regularization loss function.
     MaskedLoss: Masked loss function.
     MyDataset: Custom dataset class.
 
@@ -11,8 +11,7 @@ Functions:
     create_animation: Create an animation of the prediction evolution.
     downscale_data: Downscale the data by the given factor.
     get_runs: Get all runs from the specified experiment.
-    load_best_model: Load the best checkpoint of the model from the most recent MLflow
-        run.
+    load_best_model: Load the best checkpoint of the model recent MLflow run.
     load_config_and_data: Load the configuration and data.
     load_data: Load the data.
     setup_mlflow: Setup MLflow.
@@ -21,18 +20,16 @@ Functions:
 """
 # Standard library
 import json
-import logging
 import os
 import socket
 import warnings
 from typing import Any
-from typing import Dict
 from typing import List
 from typing import Tuple
-from typing import Union
 
 # Third-party
 import dask
+import matplotlib
 import matplotlib.pyplot as plt
 import mlflow  # type: ignore
 import numpy as np
@@ -49,24 +46,7 @@ from torch.distributions import Normal
 from torch.utils.data import Dataset
 
 # First-party
-from weathergraphnet.models import GNNModel
-from weathergraphnet.models import UNet
-
-
-def setup_logger() -> logging.Logger:
-    """Set up a logger for the module."""
-    general_logger = logging.getLogger(__name__)
-    general_logger.setLevel(logging.DEBUG)
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    file_handler = logging.FileHandler("error.log")
-    file_handler.setLevel(logging.ERROR)
-    file_handler.setFormatter(formatter)
-    general_logger.addHandler(file_handler)
-
-    return general_logger
-
+from weathergraphnet.logger import setup_logger
 
 logger = setup_logger()
 
@@ -124,7 +104,7 @@ class CRPSLoss(nn.Module):
             raise
 
 
-class EnsembleVarianceRegularizationLoss(nn.Module):
+class EnsembleVarRegLoss(nn.Module):
     """Ensemble variance regularization loss function.
 
     This class implements the ensemble variance regularization loss function, which is
@@ -284,7 +264,7 @@ class MyDataset(Dataset):
             logger.exception("Error getting length of dataset: %s", e)
             raise
 
-    def __getitem__(self, idx: int) -> Tuple[xr.Dataset, xr.Dataset]:
+    def __getitem__(self, idx: int) -> Tuple[np.ndarray, np.ndarray]:
         """Get the data for the train and test sets.
 
         This method gets the data for the train and test sets.
@@ -298,17 +278,14 @@ class MyDataset(Dataset):
         """
         try:
             # Get the data for the train and test sets
-            x: xr.Dataset = self.data.isel(
-                member=self.train_indices, time=idx
-            ).unsqueeze(1)
-            y: xr.Dataset = self.data.isel(
-                member=self.test_indices, time=idx
-            ).unsqueeze(1)
+            # TODO: make sure that no unsqueezing is required to keep member dim
+            x = np.array(self.data.isel(member=self.train_indices, time=idx).values)
+            y = np.array(self.data.isel(member=self.test_indices, time=idx).values)
 
-            return x, y
         except Exception as e:
             logger.exception("Error getting data for train and test sets: %s", e)
             raise
+        return x, y
 
     def __iter__(self):
         """Get an iterator for the dataset."""
@@ -417,7 +394,7 @@ def create_animation(data: dict, member: int, preds: str) -> str:
     # Plot the first time step of the variable
     if preds == "ICON":
         y_mem = data_test.isel(member=member)
-    elif preds == "CNN":
+    elif preds in ["CNN", "GNN"]:
         y_mem = y_pred_reshaped.isel(member=member)
     else:
         raise ValueError(f"Unrecognized prediction type: {preds}")
@@ -434,12 +411,16 @@ def create_animation(data: dict, member: int, preds: str) -> str:
         )
         raise
 
+    # TODO: plot member_name here instead
     # Define the filename for the output gif
-    output_filename = f"{here()}/output/animation_member_{member}_{preds}.gif"
+    member_name = data_test.member[member].item()
+    output_filename = f"{here()}/output/animations_{member_name}_{preds}.gif"
 
     try:
         # Save the animation as a gif
+        logger.info("Saving animation to %s", output_filename)
         ani.save(output_filename, writer="imagemagick", dpi=100)
+
     except Exception as e:
         logger.exception(
             f"Error saving animation for member {member}"
@@ -447,6 +428,8 @@ def create_animation(data: dict, member: int, preds: str) -> str:
             e,
         )
         raise
+    finally:
+        plt.close("all")
 
     return output_filename
 
@@ -469,7 +452,7 @@ def downscale_data(data: xr.Dataset, factor: int) -> xr.Dataset:
         raise ValueError(f"Factor must be a positive integer, but got {factor}")
 
     with dask.config.set(
-        Dict[str, bool](**{"array.slicing.split_large_chunks": False})
+        dict[str, bool](**{"array.slicing.split_large_chunks": False})
     ):
         # Coarsen the height and ncells dimensions by the given factor
         data_coarse = data.coarsen(height=factor, ncells=factor).reduce(np.mean)
@@ -489,13 +472,16 @@ def get_runs(experiment_name: str) -> List[mlflow.entities.Run]:
         ValueError: If no runs are found for the given experiment name.
 
     """
-    runs = mlflow.search_runs(experiment_names=experiment_name)
-    if not runs:
+    runs = mlflow.search_runs(
+        experiment_names=[experiment_name],
+        filter_string="params.model_checkpoint_path IS NOT NULL",
+    )
+    if len(runs) == 0:
         raise ValueError(f"No runs found in experiment: {experiment_name}")
     return runs
 
 
-def load_best_model(experiment_name: str) -> Union[GNNModel, UNet]:
+def load_best_model(experiment_name: str) -> nn.Module:
     """Load the best model from a given MLflow experiment.
 
     Args:
@@ -511,7 +497,9 @@ def load_best_model(experiment_name: str) -> Union[GNNModel, UNet]:
     """
     try:
         runs = get_runs(experiment_name)
-        run_id = runs[0]["run_id"]
+        # TODO: actually get the best model
+
+        run_id: str = runs.run_id[0]  # type: ignore [attr-defined]
         best_model_path = mlflow.get_artifact_uri()
         best_model_path = os.path.abspath(os.path.join(best_model_path, "../../"))
         best_model_path = os.path.join(best_model_path, run_id, "artifacts", "models")
@@ -520,17 +508,26 @@ def load_best_model(experiment_name: str) -> Union[GNNModel, UNet]:
                 f"Best model path does not exist: {best_model_path}"
             )
         model = mlflow.pytorch.load_model(best_model_path)
-        return model
     except (ValueError, FileNotFoundError) as e:
         logger.exception(str(e))
         raise e
+    return model
+
+
+def load_config():
+    """Load the configuration for the weathergraphnet project."""
+    with open(
+        str(here()) + "/src/weathergraphnet/config.json", "r", encoding="UTF-8"
+    ) as f:
+        config = json.load(f)
+    return config
 
 
 def load_config_and_data() -> Tuple[dict, xr.Dataset, xr.Dataset]:
     """Load configuration and data for the weathergraphnet project.
 
     Returns:
-    Tuple[dict, xr.Dataset, xr.Dataset]: A tuple containing the configuration
+        Tuple[dict, xr.Dataset, xr.Dataset]: A tuple containing the configuration
         dictionary, and two xarray DataArrays containing the training and testing data.
 
     Raises:
@@ -539,10 +536,7 @@ def load_config_and_data() -> Tuple[dict, xr.Dataset, xr.Dataset]:
 
     """
     try:
-        with open(
-            str(here()) + "/src/weathergraphnet/config.json", "r", encoding="UTF-8"
-        ) as f:
-            config = json.load(f)
+        config = load_config()
 
         # Suppress all warnings
         suppress_warnings()
@@ -559,10 +553,10 @@ def load_config_and_data() -> Tuple[dict, xr.Dataset, xr.Dataset]:
             data_test = downscale_data(data_test, config["coarsen"])
             data_train = downscale_data(data_train, config["coarsen"])
 
-        return config, data_train, data_test
     except (FileNotFoundError, ValueError) as e:
         logger.exception(str(e))
         raise e
+    return config, data_train, data_test
 
 
 def load_data(config: dict) -> Tuple[xr.Dataset, xr.Dataset]:
@@ -636,15 +630,17 @@ def setup_mlflow() -> Tuple[str, str]:
                 name=experiment_name, artifact_location=artifact_path
             )
         mlflow.set_experiment(experiment_name=experiment_name)
-        return artifact_path, experiment_name
     except Exception as e:
         logger.exception(str(e))
         raise e
+    logger.info("MLflow experiment name: %s", experiment_name)
+    return artifact_path, experiment_name
 
 
 def suppress_warnings():
     """Suppresses certain warnings that are not relevant to the user."""
     warnings.simplefilter("always")
+    warnings.filterwarnings("ignore", category=matplotlib.MatplotlibDeprecationWarning)
     warnings.filterwarnings("ignore", message="Setuptools is replacing dist")
     warnings.filterwarnings(
         "ignore",
