@@ -262,7 +262,8 @@ class BaseNet(nn.Module):
                 scale_factor=2, mode="bilinear", align_corners=True
             )
         except ValueError as e:
-            logger.error("Error occurred while initializing the Decoder class: %s", e)
+            logger.error(
+                "Error occurred while initializing the Decoder class: %s", e)
 
     def forward(self, x):
         """Forward pass through the network."""
@@ -374,15 +375,18 @@ class Decoder(BaseNet):
             encoder_layer = encoder_layer[
                 :,
                 :,
-                diff_y // 2 : encoder_layer.size()[2] - diff_y // 2,
-                diff_x // 2 : encoder_layer.size()[3] - diff_x // 2,
+                diff_y // 2: encoder_layer.size()[2] - diff_y // 2,
+                diff_x // 2: encoder_layer.size()[3] - diff_x // 2,
             ]
             if diff_y % 2 == 1:
-                encoder_layer = encoder_layer[:, :, 1 : encoder_layer.size()[2], :]
+                encoder_layer = encoder_layer[:, :, 1: encoder_layer.size()[
+                    2], :]
             if diff_x % 2 == 1:
-                encoder_layer = encoder_layer[:, :, :, 1 : encoder_layer.size()[3]]
+                encoder_layer = encoder_layer[:, :, :, 1: encoder_layer.size()[
+                    3]]
         except IndexError as e:
-            logger.error("Error occurred while cropping the encoder layer: %s", e)
+            logger.error(
+                "Error occurred while cropping the encoder layer: %s", e)
         return encoder_layer
 
     def forward(  # pylint: disable=too-many-locals, too-many-statements
@@ -412,7 +416,7 @@ class Decoder(BaseNet):
 
             if y1.shape != x3.shape:
                 x3 = self.crop(x3, y1)
-                cropped += 1
+                cropped += x3.shape[3] - y1.shape[3]
             y1 = torch.cat([x3, y1], dim=1)
 
             y1 = self.activation(y1)
@@ -427,7 +431,7 @@ class Decoder(BaseNet):
 
             if y2.shape != x2.shape:
                 x2 = self.crop(x2, y2)
-                cropped += 1
+                cropped += x2.shape[3] - y2.shape[3]
             y2 = torch.cat([x2, y2], dim=1)
 
             y2 = self.activation(y2)
@@ -442,7 +446,7 @@ class Decoder(BaseNet):
 
             if y3.shape != x1.shape:
                 x1 = self.crop(x1, y3)
-                cropped += 1
+                cropped += x1.shape[3] - y3.shape[3]
             y3 = torch.cat([x1, y3], dim=1)
 
             y3 = self.activation(y3)
@@ -455,7 +459,8 @@ class Decoder(BaseNet):
 
             out = self.conv_layers[4](y4)
 
-            out = nn.functional.pad(out, (cropped * 2, 0, 0, 0), mode="replicate")
+            out = nn.functional.pad(
+                out, (cropped * 2, 0, 0, 0), mode="replicate")
 
             logged_messages = set()
             # Log the messages after each epoch, but only if they haven't been logged
@@ -513,7 +518,8 @@ class UNet(BaseNet):
             self.encoder = Encoder(channels_in, channels_out, hidden_size)
             self.decoder = Decoder(channels_in, channels_out, hidden_size)
         except RuntimeError as e:
-            logger.error("Error occurred while initializing UNet network: %s", str(e))
+            logger.error(
+                "Error occurred while initializing UNet network: %s", str(e))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass through the UNet network.
@@ -529,10 +535,15 @@ class UNet(BaseNet):
             x1, x2, x3, x4 = self.encoder(x)
 
             out: torch.Tensor = self.decoder((x1, x2, x3, x4))
+            if x.shape[3] != out.shape[3]:
+                out = nn.functional.pad(
+                    out, (x.shape[3] - out.shape[3], 0, 0, 0), mode="replicate"
+                )  # pad the output tensor
 
         except RuntimeError as e:
             logger.error(
-                "Error occurred during forward pass through UNet network: %s", str(e)
+                "Error occurred during forward pass through UNet network: %s", str(
+                    e)
             )
         return out
 
@@ -578,12 +589,14 @@ class UNet(BaseNet):
                         configs_train_cnn.scheduler.step()  # update the learning rate
                     running_loss += loss.item()
                     print(f"Running Loss: {running_loss}", flush=True)
-                avg_loss = running_loss / float(len(configs_train_cnn.dataloader))
+                avg_loss = running_loss / \
+                    float(len(configs_train_cnn.dataloader))
                 logger.info("Epoch: %d, Loss: %f", epoch, avg_loss)
                 mlflow.log_metric("loss", avg_loss)
 
         except RuntimeError as e:
-            logger.error("Error occurred while training UNet network: %s", str(e))
+            logger.error(
+                "Error occurred while training UNet network: %s", str(e))
 
     def eval_with_configs(
         self, configs_eval_cnn: EvaluationConfigCNN
@@ -622,7 +635,8 @@ class UNet(BaseNet):
                     y_preds.append(output.cpu())
                 loss /= len(configs_eval_cnn.dataloader)
         except RuntimeError as e:
-            logger.error("Error occurred while evaluating UNet network: %s", str(e))
+            logger.error(
+                "Error occurred while evaluating UNet network: %s", str(e))
         return loss, y_preds
 
 
@@ -638,7 +652,8 @@ class DownConvLayers(torch.nn.Module):
         """
         super().__init__()
         try:
-            self.conv1 = GCNConv(gnn_configs.channels_in, gnn_configs.hidden_feats)
+            self.conv1 = GCNConv(gnn_configs.channels_in,
+                                 gnn_configs.hidden_feats)
             self.conv2 = GCNConv(
                 gnn_configs.hidden_feats, gnn_configs.hidden_feats // 2
             )
@@ -652,7 +667,8 @@ class DownConvLayers(torch.nn.Module):
                 gnn_configs.hidden_feats // 8, gnn_configs.hidden_feats // 16
             )
         except KeyError as e:
-            logger.error("Error occurred while initializing DownConvLayers: %s", e)
+            logger.error(
+                "Error occurred while initializing DownConvLayers: %s", e)
             raise
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
@@ -704,9 +720,11 @@ class UpConvLayers(torch.nn.Module):
             self.upconv4 = GCNConv(
                 gnn_configs.hidden_feats // 2, gnn_configs.hidden_feats
             )
-            self.upconv5 = GCNConv(gnn_configs.hidden_feats, gnn_configs.channels_out)
+            self.upconv5 = GCNConv(
+                gnn_configs.hidden_feats, gnn_configs.channels_out)
         except KeyError as e:
-            logger.error("Error occurred while initializing UpConvLayers: %s", e)
+            logger.error(
+                "Error occurred while initializing UpConvLayers: %s", e)
             raise
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
@@ -909,13 +927,15 @@ class GNNModel(torch.nn.Module):
                             configs_train_gnn.mask,
                         )
                     except Exception as e:
-                        logger.error("Error occurred while calculating loss: %s", e)
+                        logger.error(
+                            "Error occurred while calculating loss: %s", e)
                         raise e
                 else:
                     try:
                         loss = configs_train_gnn.loss_fn(output, data_out.x)
                     except Exception as e:
-                        logger.error("Error occurred while calculating loss: %s", e)
+                        logger.error(
+                            "Error occurred while calculating loss: %s", e)
                         raise e
                 loss.backward()
                 configs_train_gnn.optimizer.step()
@@ -923,7 +943,8 @@ class GNNModel(torch.nn.Module):
                     configs_train_gnn.scheduler.step()  # update the learning rate
                 running_loss += loss.item()
 
-            avg_loss = running_loss / float(len(configs_train_gnn.loader_train_in))
+            avg_loss = running_loss / \
+                float(len(configs_train_gnn.loader_train_in))
             logger.info("Epoch: %d, Loss: %f4", epoch, avg_loss)
             mlflow.log_metric("loss", avg_loss)
 
@@ -962,13 +983,15 @@ class GNNModel(torch.nn.Module):
                             output, data_out.x, configs_eval_gnn.mask
                         )
                     except Exception as e:
-                        logger.error("Error occurred while calculating loss: %s", e)
+                        logger.error(
+                            "Error occurred while calculating loss: %s", e)
                         raise e
                 else:
                     try:
                         loss += configs_eval_gnn.loss_fn(output, data_out.x)
                     except Exception as e:
-                        logger.error("Error occurred while calculating loss: %s", e)
+                        logger.error(
+                            "Error occurred while calculating loss: %s", e)
                         raise e
                 y_preds.append(output.cpu())
             loss /= float(len(configs_eval_gnn.loader_in))

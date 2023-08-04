@@ -540,9 +540,11 @@ def load_config_and_data() -> Tuple[dict, xr.Dataset, xr.Dataset]:
 
         # Suppress all warnings
         suppress_warnings()
-
+        print("start loading the data")
         data_train, data_test = load_data(config)
+        print("data loaded")
 
+        print("start coarsening the data")
         if config["coarsen"] > 1:
             # Coarsen the data
             if not isinstance(config["coarsen"], int) or config["coarsen"] <= 0:
@@ -551,7 +553,9 @@ def load_config_and_data() -> Tuple[dict, xr.Dataset, xr.Dataset]:
                     f"but got {config['coarsen']}"
                 )
             data_test = downscale_data(data_test, config["coarsen"])
+            print("Test data coarsened")
             data_train = downscale_data(data_train, config["coarsen"])
+            print("Train data coarsened")
 
     except (FileNotFoundError, ValueError) as e:
         logger.exception(str(e))

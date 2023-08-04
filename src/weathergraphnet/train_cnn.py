@@ -2,9 +2,9 @@
 
 # Standard library
 import random
-from typing import cast
 from typing import List
 from typing import Union
+from typing import cast
 
 # Third-party
 import mlflow  # type: ignore
@@ -22,11 +22,11 @@ from weathergraphnet.logger import setup_logger
 from weathergraphnet.models import EvaluationConfigCNN
 from weathergraphnet.models import TrainingConfigCNN
 from weathergraphnet.models import UNet
+from weathergraphnet.utils import MaskedLoss
+from weathergraphnet.utils import MyDataset
 from weathergraphnet.utils import create_animation
 from weathergraphnet.utils import load_best_model
 from weathergraphnet.utils import load_config_and_data
-from weathergraphnet.utils import MaskedLoss
-from weathergraphnet.utils import MyDataset
 from weathergraphnet.utils import setup_mlflow
 
 logger = setup_logger()
@@ -41,10 +41,13 @@ if __name__ == "__main__":
         logger.info(data_train.shape)
         logger.info(data_test.shape)
         # Create the dataset and dataloader
+        print("create dataloader")
         dataset = MyDataset(data_train, config["member_split"])
         dataloader = DataLoader(dataset, config["batch_size"], shuffle=True)
         dataset_test = MyDataset(data_test, config["member_split"])
-        dataloader_test = DataLoader(dataset_test, config["batch_size"], shuffle=False)
+        dataloader_test = DataLoader(
+            dataset_test, config["batch_size"], shuffle=False)
+        print("dataloader created")
 
         # loss_fn: Union[
         #     EnsembleVarRegLoss, MaskedLoss, nn.MSELoss, nn.Module
@@ -58,7 +61,8 @@ if __name__ == "__main__":
             # Create a mask that hides all data with zero variance
             mask = variance <= config["mask_threshold"]
             torch.from_numpy(mask.values.astype(float))
-            logger.info("Number of masked cells: %d", sum((mask[0].values == 1)))
+            logger.info("Number of masked cells: %d",
+                        sum((mask[0].values == 1)))
 
         else:
             mask = None
@@ -68,12 +72,16 @@ if __name__ == "__main__":
         if config["retrain"]:
             model: Union[UNet, nn.Module] = UNet(
                 channels_in=config["member_split"],
-                channels_out=data_train.sizes["member"] - config["member_split"],
+                channels_out=data_train.sizes["member"] -
+                config["member_split"],
                 hidden_size=config["hidden_feats"],
             )
 
             optimizer = optim.Adam(model.parameters(), lr=config["lr"] * 100)
             scheduler = StepLR(optimizer, step_size=3, gamma=0.1)
+
+            device = torch.device(
+                'cuda' if torch.cuda.is_available() else 'cpu')
 
             # Train the model with MLflow logging
             MLFlowLogger(experiment_name=experiment_name)
@@ -87,13 +95,13 @@ if __name__ == "__main__":
                     loss_fn=loss_fn,
                     mask=mask,
                     epochs=config["epochs"],
-                    device=config["device"],
+                    device=device,
                     seed=config["seed"],
                 )
                 if torch.cuda.device_count() > 1:
-                    logger.info("Using %d GPUs for Training", torch.cuda.device_count())
+                    logger.info("Using %d GPUs for Training",
+                                torch.cuda.device_count())
                     model = cast(UNet, nn.DataParallel(model).module)
-
                 model.train_with_configs(config_train)  # type: ignore
         else:
             # Load the best model from the most recent MLflow run
@@ -112,9 +120,10 @@ if __name__ == "__main__":
     )
     if torch.cuda.device_count() > 1:
         logger.info("Using %d GPUs for Evaluation", torch.cuda.device_count())
+        model = cast(nn.DataParallel(model).module)
 
-        model = cast(UNet, nn.DataParallel(model).module)
-    test_loss, y_pred = model.eval_with_configs(config_eval)  # type: ignore [operator]
+    test_loss, y_pred = model.eval_with_configs(
+        config_eval)  # type: ignore [operator]
     # if isinstance(loss_fn, nn.CrossEntropyLoss):
     # test_loss = test_loss.mean().item()
     logger.info("Best model test loss: %4f", test_loss)
@@ -128,7 +137,8 @@ if __name__ == "__main__":
             (
                 np.array(
                     data_test.isel(
-                        member=slice(config["member_split"], data_test.sizes["member"])
+                        member=slice(config["member_split"],
+                                     data_test.sizes["member"])
                     ).values
                 ).shape
             )
@@ -145,7 +155,8 @@ if __name__ == "__main__":
         member = random.randint(
             0, data_test.sizes["member"] - config["member_split"] - 1
         )
-        output_filename = create_animation(data_gif, member=member, preds="CNN")
+        output_filename = create_animation(
+            data_gif, member=member, preds="CNN")
     except Exception as e:
         logger.error("An error occurred while creating the animation: %s", e)
 
