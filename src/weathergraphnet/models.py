@@ -1,5 +1,6 @@
 """Contains the models used for weather prediction."""
 # Standard library
+import os
 from dataclasses import dataclass
 from typing import List
 from typing import Optional
@@ -14,6 +15,7 @@ from torch import optim
 from torch.optim import Adam
 from torch.optim.lr_scheduler import CyclicLR
 from torch.optim.lr_scheduler import StepLR
+from torch.utils.data.distributed import DistributedSampler
 from torch_geometric.data import Data  # type: ignore  # type: ignore
 from torch_geometric.loader import DataLoader  # type: ignore
 from torch_geometric.nn import GCNConv  # type: ignore
@@ -131,13 +133,14 @@ class TrainingConfigCNN(dict):  # pylint: disable=too-many-instance-attributes
 
     """
 
-    dataloader: DataLoader
+    dataset: DataLoader
     optimizer: Union[torch.optim.Optimizer, Adam]
     scheduler: Union[CyclicLR, StepLR]
     loss_fn: Union[
         nn.Module,
         nn.MSELoss,
     ]
+    batch_size: int
     mask: Optional[torch.Tensor] = None
     epochs: int = 10
     device: str = "cuda"
@@ -159,7 +162,7 @@ class EvaluationConfigCNN(dict):
 
     """
 
-    dataloader: DataLoader
+    dataset: DataLoader
     loss_fn: Union[
         nn.Module,
         nn.MSELoss,
@@ -262,8 +265,7 @@ class BaseNet(nn.Module):
                 scale_factor=2, mode="bilinear", align_corners=True
             )
         except ValueError as e:
-            logger.error(
-                "Error occurred while initializing the Decoder class: %s", e)
+            logger.error("Error occurred while initializing the Decoder class: %s", e)
 
     def forward(self, x):
         """Forward pass through the network."""
@@ -375,18 +377,15 @@ class Decoder(BaseNet):
             encoder_layer = encoder_layer[
                 :,
                 :,
-                diff_y // 2: encoder_layer.size()[2] - diff_y // 2,
-                diff_x // 2: encoder_layer.size()[3] - diff_x // 2,
+                diff_y // 2 : encoder_layer.size()[2] - diff_y // 2,
+                diff_x // 2 : encoder_layer.size()[3] - diff_x // 2,
             ]
             if diff_y % 2 == 1:
-                encoder_layer = encoder_layer[:, :, 1: encoder_layer.size()[
-                    2], :]
+                encoder_layer = encoder_layer[:, :, 1 : encoder_layer.size()[2], :]
             if diff_x % 2 == 1:
-                encoder_layer = encoder_layer[:, :, :, 1: encoder_layer.size()[
-                    3]]
+                encoder_layer = encoder_layer[:, :, :, 1 : encoder_layer.size()[3]]
         except IndexError as e:
-            logger.error(
-                "Error occurred while cropping the encoder layer: %s", e)
+            logger.error("Error occurred while cropping the encoder layer: %s", e)
         return encoder_layer
 
     def forward(  # pylint: disable=too-many-locals, too-many-statements
@@ -459,8 +458,7 @@ class Decoder(BaseNet):
 
             out = self.conv_layers[4](y4)
 
-            out = nn.functional.pad(
-                out, (cropped * 2, 0, 0, 0), mode="replicate")
+            out = nn.functional.pad(out, (cropped * 2, 0, 0, 0), mode="replicate")
 
             logged_messages = set()
             # Log the messages after each epoch, but only if they haven't been logged
@@ -518,8 +516,7 @@ class UNet(BaseNet):
             self.encoder = Encoder(channels_in, channels_out, hidden_size)
             self.decoder = Decoder(channels_in, channels_out, hidden_size)
         except RuntimeError as e:
-            logger.error(
-                "Error occurred while initializing UNet network: %s", str(e))
+            logger.error("Error occurred while initializing UNet network: %s", str(e))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass through the UNet network.
@@ -542,12 +539,13 @@ class UNet(BaseNet):
 
         except RuntimeError as e:
             logger.error(
-                "Error occurred during forward pass through UNet network: %s", str(
-                    e)
+                "Error occurred during forward pass through UNet network: %s", str(e)
             )
         return out
 
-    def train_with_configs(self, configs_train_cnn: TrainingConfigCNN) -> None:
+    def train_with_configs(
+        self, rank, configs_train_cnn: TrainingConfigCNN, world_size
+    ) -> None:
         """Train the model.
 
         Args:
@@ -557,24 +555,37 @@ class UNet(BaseNet):
         None
 
         """
+        os.environ["MASTER_ADDR"] = "localhost"
+        os.environ["MASTER_PORT"] = "12355"  # choose an available port
+        torch.cuda.set_device(rank)
+        torch.distributed.init_process_group("nccl", rank=rank, world_size=world_size)
         print("Training UNet network with configurations:", flush=True)
         print(configs_train_cnn, flush=True)
+
+        sampler = DistributedSampler(configs_train_cnn.dataset)
+        dataloader = DataLoader(
+            configs_train_cnn.dataset, configs_train_cnn.batch_size, sampler=sampler
+        )
+
+        model = self.to(configs_train_cnn.device)
+        model = nn.parallel.DistributedDataParallel(model)
+        world_size = torch.cuda.device_count()
 
         try:
             device = configs_train_cnn.device
             if configs_train_cnn.mask is not None:
                 configs_train_cnn.mask = configs_train_cnn.mask.to(device)
-            model = self.to(configs_train_cnn.device)
             for epoch in range(configs_train_cnn.epochs):
+                sampler.set_epoch(epoch)
                 print(f"Epoch: {epoch}", flush=True)
                 running_loss = 0.0
-                for input_data, target_data in configs_train_cnn.dataloader:
+                for input_data, target_data in dataloader:
                     print(input_data.shape, flush=True)
                     input_data = input_data.to(configs_train_cnn.device)
                     target_data = target_data.to(configs_train_cnn.device)
                     configs_train_cnn.optimizer.zero_grad()
                     # pylint: disable=not-callable
-                    output = model(input_data)
+                    output = self(input_data)
                     if configs_train_cnn.mask is not None:
                         loss = configs_train_cnn.loss_fn(
                             output,
@@ -589,14 +600,12 @@ class UNet(BaseNet):
                         configs_train_cnn.scheduler.step()  # update the learning rate
                     running_loss += loss.item()
                     print(f"Running Loss: {running_loss}", flush=True)
-                avg_loss = running_loss / \
-                    float(len(configs_train_cnn.dataloader))
+                avg_loss = running_loss / float(len(configs_train_cnn.dataloader))
                 logger.info("Epoch: %d, Loss: %f", epoch, avg_loss)
                 mlflow.log_metric("loss", avg_loss)
 
         except RuntimeError as e:
-            logger.error(
-                "Error occurred while training UNet network: %s", str(e))
+            logger.error("Error occurred while training UNet network: %s", str(e))
 
     def eval_with_configs(
         self, configs_eval_cnn: EvaluationConfigCNN
@@ -619,7 +628,7 @@ class UNet(BaseNet):
             with torch.no_grad():
                 loss: float = 0.0
                 y_preds: List[torch.Tensor] = []
-                for input_data, target_data in configs_eval_cnn.dataloader:
+                for input_data, target_data in dataloader_test:
                     input_data = input_data.to(device)
                     target_data = target_data.to(device)
                     # pylint: disable=not-callable
@@ -635,8 +644,7 @@ class UNet(BaseNet):
                     y_preds.append(output.cpu())
                 loss /= len(configs_eval_cnn.dataloader)
         except RuntimeError as e:
-            logger.error(
-                "Error occurred while evaluating UNet network: %s", str(e))
+            logger.error("Error occurred while evaluating UNet network: %s", str(e))
         return loss, y_preds
 
 
@@ -652,8 +660,7 @@ class DownConvLayers(torch.nn.Module):
         """
         super().__init__()
         try:
-            self.conv1 = GCNConv(gnn_configs.channels_in,
-                                 gnn_configs.hidden_feats)
+            self.conv1 = GCNConv(gnn_configs.channels_in, gnn_configs.hidden_feats)
             self.conv2 = GCNConv(
                 gnn_configs.hidden_feats, gnn_configs.hidden_feats // 2
             )
@@ -667,8 +674,7 @@ class DownConvLayers(torch.nn.Module):
                 gnn_configs.hidden_feats // 8, gnn_configs.hidden_feats // 16
             )
         except KeyError as e:
-            logger.error(
-                "Error occurred while initializing DownConvLayers: %s", e)
+            logger.error("Error occurred while initializing DownConvLayers: %s", e)
             raise
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
@@ -720,11 +726,9 @@ class UpConvLayers(torch.nn.Module):
             self.upconv4 = GCNConv(
                 gnn_configs.hidden_feats // 2, gnn_configs.hidden_feats
             )
-            self.upconv5 = GCNConv(
-                gnn_configs.hidden_feats, gnn_configs.channels_out)
+            self.upconv5 = GCNConv(gnn_configs.hidden_feats, gnn_configs.channels_out)
         except KeyError as e:
-            logger.error(
-                "Error occurred while initializing UpConvLayers: %s", e)
+            logger.error("Error occurred while initializing UpConvLayers: %s", e)
             raise
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
@@ -927,15 +931,13 @@ class GNNModel(torch.nn.Module):
                             configs_train_gnn.mask,
                         )
                     except Exception as e:
-                        logger.error(
-                            "Error occurred while calculating loss: %s", e)
+                        logger.error("Error occurred while calculating loss: %s", e)
                         raise e
                 else:
                     try:
                         loss = configs_train_gnn.loss_fn(output, data_out.x)
                     except Exception as e:
-                        logger.error(
-                            "Error occurred while calculating loss: %s", e)
+                        logger.error("Error occurred while calculating loss: %s", e)
                         raise e
                 loss.backward()
                 configs_train_gnn.optimizer.step()
@@ -943,8 +945,7 @@ class GNNModel(torch.nn.Module):
                     configs_train_gnn.scheduler.step()  # update the learning rate
                 running_loss += loss.item()
 
-            avg_loss = running_loss / \
-                float(len(configs_train_gnn.loader_train_in))
+            avg_loss = running_loss / float(len(configs_train_gnn.loader_train_in))
             logger.info("Epoch: %d, Loss: %f4", epoch, avg_loss)
             mlflow.log_metric("loss", avg_loss)
 
@@ -983,15 +984,13 @@ class GNNModel(torch.nn.Module):
                             output, data_out.x, configs_eval_gnn.mask
                         )
                     except Exception as e:
-                        logger.error(
-                            "Error occurred while calculating loss: %s", e)
+                        logger.error("Error occurred while calculating loss: %s", e)
                         raise e
                 else:
                     try:
                         loss += configs_eval_gnn.loss_fn(output, data_out.x)
                     except Exception as e:
-                        logger.error(
-                            "Error occurred while calculating loss: %s", e)
+                        logger.error("Error occurred while calculating loss: %s", e)
                         raise e
                 y_preds.append(output.cpu())
             loss /= float(len(configs_eval_gnn.loader_in))
