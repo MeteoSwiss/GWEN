@@ -1,19 +1,13 @@
+# Third-party
 import xarray as xr
 from _typeshed import Incomplete
-from typing import List, Pattern
-from weathergraphnet.utils import setup_logger as setup_logger
 
-hostname: str
-SCRATCH: str
-data_path: str
-filename_regex: str
-filename_pattern: Pattern[str]
-zarr_path: str
-folders: List[str]
-compressor: Incomplete
+# First-party
+from weathergraphnet.logger import setup_logger as setup_logger
+from weathergraphnet.utils import load_config as load_config
+
+config_dict: Incomplete
 logger: Incomplete
 
-def load_data() -> None: ...
-def append_or_create_zarr(data: xr.Dataset) -> None: ...
-def handle_file_not_found_error(file: str, e: Exception) -> None: ...
-def handle_invalid_file_format_error(file: str, e: Exception) -> None: ...
+def append_or_create_zarr(data_out: xr.Dataset, config: dict) -> None: ...
+def load_data(config: dict) -> None: ...

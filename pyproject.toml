@@ -76,9 +76,10 @@ known_first_party = [
 ]
 
 [tool.mypy]
-mypy_path = "/users/sadamov/pyprojects/weathergraphnet/out/"
 
+mypy_path = "/users/sadamov/pyprojects/weathergraphnet/out/"
 [[tool.mypy.overrides]]
+plugins = "pytest_mypy_plugins"
 # Note: Only globally ignore missing imports as a matter of last resort!
 # See https://blog.wolt.com/engineering/2021/09/30/professional-grade-mypy-configuration/
 module = [
@@ -135,6 +136,7 @@ disable = [
     "R1720", # Unnecessary "elif" after "raise" (no-else-raise)
     "R1724", # Unnecessary "elif" after "continue" (no-else-continue)
     "W1116", # Second argument of isinstance is not a type (isinstance-second-argument-not-valid-type)
+    "W0511", # TODos (fixme)
 ]
 # Ignore (sub-)modules that trigger errors like E1101 (no-member) or E0611 (no-name-in-module)
 ignored-modules = []
