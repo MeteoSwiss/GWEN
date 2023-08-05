@@ -46,6 +46,7 @@ from torch.distributions import Normal
 from torch.utils.data import Dataset
 
 # First-party
+from weathergraphnet.create_gif import get_member_name
 from weathergraphnet.logger import setup_logger
 
 logger = setup_logger()
@@ -238,6 +239,7 @@ class MyDataset(Dataset):
         try:
             self.data: xr.Dataset = data
             self.split = split
+
             # Get the number of members in the dataset
             num_members: int = self.data.sizes["member"]
 
@@ -252,6 +254,10 @@ class MyDataset(Dataset):
             # Split the member indices into train and test sets
             self.train_indices: np.ndarray = member_indices[: self.split]
             self.test_indices: np.ndarray = member_indices[self.split :]
+            if False:  # TODO: to configs:
+                self.train_indices = np.random.choice(self.train_indices)
+                self.test_indices = np.random.choice(self.test_indices)
+
         except Exception as e:
             logger.exception("Error initializing custom dataset: %s", e)
             raise
@@ -264,7 +270,7 @@ class MyDataset(Dataset):
             logger.exception("Error getting length of dataset: %s", e)
             raise
 
-    def __getitem__(self, idx: int) -> Tuple[np.ndarray, np.ndarray]:
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
         """Get the data for the train and test sets.
 
         This method gets the data for the train and test sets.
@@ -281,10 +287,12 @@ class MyDataset(Dataset):
             # TODO: make sure that no unsqueezing is required to keep member dim
             x = np.array(self.data.isel(member=self.train_indices, time=idx).values)
             y = np.array(self.data.isel(member=self.test_indices, time=idx).values)
-
+            x = torch.from_numpy(x)
+            y = torch.from_numpy(y)
         except Exception as e:
             logger.exception("Error getting data for train and test sets: %s", e)
             raise
+
         return x, y
 
     def __iter__(self):
@@ -295,10 +303,17 @@ class MyDataset(Dataset):
             logger.exception("Error getting iterator for dataset: %s", e)
             raise
 
+    def get_test_indices(self) -> np.ndarray:
+        """Get the test indices.
 
-def animate(
-    data: xr.Dataset, member: int = 0, preds: str = "CNN"
-) -> animation.FuncAnimation:
+        Returns:
+            test_indices: Indices for the test set.
+
+        """
+        return self.test_indices
+
+
+def animate(data: xr.Dataset, member: str, preds: str) -> animation.FuncAnimation:
     """Animate the prediction evolution.
 
     Args:
@@ -327,7 +342,7 @@ def animate(
         text = ax.text(
             0.5,
             1.05,
-            "Theta_v - Time: 0 s\n Member: 0 - None",
+            f"Theta_v - Time: 0 s\n Member: {member} - None",
             ha="center",
             va="bottom",
             transform=ax.transAxes,
@@ -370,7 +385,9 @@ def animate(
         raise e
 
 
-def create_animation(data: dict, member: int, preds: str) -> str:
+def create_animation(
+    data: dict, member_pred: int, member_target: int, preds: str
+) -> str:
     """Create an animation of weather data for a given member and prediction type.
 
     Args:
@@ -393,28 +410,31 @@ def create_animation(data: dict, member: int, preds: str) -> str:
 
     # Plot the first time step of the variable
     if preds == "ICON":
-        y_mem = data_test.isel(member=member)
+        y_mem = data_test.isel(member=member_target)
     elif preds in ["CNN", "GNN"]:
-        y_mem = y_pred_reshaped.isel(member=member)
+        y_mem = y_pred_reshaped.isel(member=member_pred)
     else:
         raise ValueError(f"Unrecognized prediction type: {preds}")
 
     y_mem = y_mem.sortby(y_mem.time, ascending=True)
+    member_name = get_member_name(data_test.member[member_target].item())
 
     try:
-        ani = animate(y_mem, member=member, preds=preds)
+        ani = animate(y_mem, member=member_name, preds=preds)
     except Exception as e:
         logger.exception(
-            f"Error creating animation for member {member}"
+            f"Error creating animation for member {member_target}"
             f" and prediction type {preds}: %s",
             e,
         )
         raise
 
-    # TODO: plot member_name here instead
     # Define the filename for the output gif
-    member_name = data_test.member[member].item()
-    output_filename = f"{here()}/output/animations_{member_name}_{preds}.gif"
+    output_filename = (
+        (f"{here()}/output/animations_{member_name}_{preds}.gif")
+        .lower()
+        .replace(" ", "_")
+    )
 
     try:
         # Save the animation as a gif
@@ -423,7 +443,7 @@ def create_animation(data: dict, member: int, preds: str) -> str:
 
     except Exception as e:
         logger.exception(
-            f"Error saving animation for member {member}"
+            f"Error saving animation for member {member_target}"
             f"and prediction type {preds}: %s",
             e,
         )
@@ -472,13 +492,22 @@ def get_runs(experiment_name: str) -> List[mlflow.entities.Run]:
         ValueError: If no runs are found for the given experiment name.
 
     """
-    runs = mlflow.search_runs(
-        experiment_names=[experiment_name],
-        filter_string="params.model_checkpoint_path IS NOT NULL",
-    )
+    # Define a function to filter runs by artifact_uri
+
+    def filter_runs(row):
+        artifact_uri = row["artifact_uri"]
+        if os.path.isdir(artifact_uri) and os.listdir(artifact_uri):
+            return True
+        else:
+            return False
+
+    runs = mlflow.search_runs(experiment_names=[experiment_name])
+    filtered_runs = runs[runs.apply(filter_runs, axis=1)]
+
     if len(runs) == 0:
         raise ValueError(f"No runs found in experiment: {experiment_name}")
-    return runs
+
+    return filtered_runs
 
 
 def load_best_model(experiment_name: str) -> nn.Module:
@@ -499,7 +528,7 @@ def load_best_model(experiment_name: str) -> nn.Module:
         runs = get_runs(experiment_name)
         # TODO: actually get the best model
 
-        run_id: str = runs.run_id[0]  # type: ignore [attr-defined]
+        run_id: str = runs.iloc[0].run_id  # type: ignore [attr-defined]
         best_model_path = mlflow.get_artifact_uri()
         best_model_path = os.path.abspath(os.path.join(best_model_path, "../../"))
         best_model_path = os.path.join(best_model_path, run_id, "artifacts", "models")
@@ -540,11 +569,8 @@ def load_config_and_data() -> Tuple[dict, xr.Dataset, xr.Dataset]:
 
         # Suppress all warnings
         suppress_warnings()
-        print("start loading the data")
         data_train, data_test = load_data(config)
-        print("data loaded")
 
-        print("start coarsening the data")
         if config["coarsen"] > 1:
             # Coarsen the data
             if not isinstance(config["coarsen"], int) or config["coarsen"] <= 0:
@@ -553,9 +579,7 @@ def load_config_and_data() -> Tuple[dict, xr.Dataset, xr.Dataset]:
                     f"but got {config['coarsen']}"
                 )
             data_test = downscale_data(data_test, config["coarsen"])
-            print("Test data coarsened")
             data_train = downscale_data(data_train, config["coarsen"])
-            print("Train data coarsened")
 
     except (FileNotFoundError, ValueError) as e:
         logger.exception(str(e))

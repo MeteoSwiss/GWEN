@@ -8,8 +8,8 @@ import pytest
 import xarray as xr
 
 # First-party
-from weathergraphnet.models import GNNModel
-from weathergraphnet.models import UNet
+from weathergraphnet.models_cnn import UNet
+from weathergraphnet.models_gnn import GNNModel
 from weathergraphnet.utils import load_best_model
 from weathergraphnet.utils import load_config_and_data
 from weathergraphnet.utils import load_data

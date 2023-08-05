@@ -8,13 +8,13 @@ import torch
 from torch import Tensor
 
 # First-party
-from weathergraphnet.models import EvaluationConfigCNN
-from weathergraphnet.models import EvaluationConfigGNN
-from weathergraphnet.models import GNNConfig
-from weathergraphnet.models import GNNModel
-from weathergraphnet.models import TrainingConfigCNN
-from weathergraphnet.models import TrainingConfigGNN
-from weathergraphnet.models import UNet
+from weathergraphnet.models_cnn import EvaluationConfigCNN
+from weathergraphnet.models_cnn import TrainingConfigCNN
+from weathergraphnet.models_cnn import UNet
+from weathergraphnet.models_gnn import EvaluationConfigGNN
+from weathergraphnet.models_gnn import GNNConfig
+from weathergraphnet.models_gnn import GNNModel
+from weathergraphnet.models_gnn import TrainingConfigGNN
 
 
 class TestGNNModel(unittest.TestCase):
@@ -27,7 +27,7 @@ class TestGNNModel(unittest.TestCase):
             "loss_fn": torch.nn.MSELoss(),
             "mask": Tensor | None,
             "epochs": 10,
-            "device": "cuda",
+            "device": "cpu",
             "seed": 42,
         }
 
@@ -44,7 +44,7 @@ class TestGNNModel(unittest.TestCase):
             "loader_out": [torch.randn(10, 1) for _ in range(3)],
             "loss_fn": torch.nn.MSELoss(),
             "mask": Tensor | None,
-            "device": "cuda",
+            "device": "cpu",
             "seed": 42,
         }
 
@@ -119,10 +119,10 @@ class TestUNet(unittest.TestCase):
         model = UNet(self.channels_in, self.channels_out, self.hidden_size)
         configs = {
             "epochs": 2,
-            "dataloader": [
+            "dataset": [
                 (torch.randn(self.input_shape), torch.randn(self.output_shape))
             ],
-            "device": "cuda",
+            "device": "cpu",
             "optimizer": torch.optim.Adam(model.parameters()),
             "scheduler": None,
             "loss_fn": torch.nn.MSELoss(),
@@ -130,15 +130,15 @@ class TestUNet(unittest.TestCase):
             "seed": 42,
         }
         configs_train = TrainingConfigCNN(**configs)
-        model.train_with_configs(configs_train)
+        model.train_with_configs(0, configs_train, 1)
 
     def test_eval_with_configs(self):
         model = UNet(self.channels_in, self.channels_out, self.hidden_size)
         configs = {
-            "dataloader": [
+            "dataset": [
                 (torch.randn(self.input_shape), torch.randn(self.output_shape))
             ],
-            "device": "cuda",
+            "device": "cpu",
             "loss_fn": torch.nn.MSELoss(),
             "mask": None,
             "seed": 42,

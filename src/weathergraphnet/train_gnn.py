@@ -40,8 +40,6 @@ Arguments:
 """
 
 # Standard library
-import random
-from typing import cast
 from typing import List
 from typing import Tuple
 
@@ -49,6 +47,8 @@ from typing import Tuple
 import mlflow  # type: ignore
 import numpy as np
 import torch
+
+# import torch.multiprocessing as mp
 import torch_geometric  # type: ignore
 import xarray as xr
 from pytorch_lightning.loggers import MLFlowLogger
@@ -64,10 +64,10 @@ from torch_geometric.utils import erdos_renyi_graph  # type: ignore
 
 # First-party
 from weathergraphnet.logger import setup_logger
-from weathergraphnet.models import EvaluationConfigGNN
-from weathergraphnet.models import GNNConfig
-from weathergraphnet.models import GNNModel
-from weathergraphnet.models import TrainingConfigGNN
+from weathergraphnet.models_gnn import EvaluationConfigGNN
+from weathergraphnet.models_gnn import GNNConfig
+from weathergraphnet.models_gnn import GNNModel
+from weathergraphnet.models_gnn import TrainingConfigGNN
 from weathergraphnet.utils import create_animation
 from weathergraphnet.utils import load_best_model
 from weathergraphnet.utils import load_config_and_data
@@ -101,7 +101,7 @@ def create_data_loader(
             )
             for sample in np.array(data.values)
         ]
-        return DataLoader(dataset, batch_size=batch, shuffle=True)
+        return DataLoader(dataset, batch_size=batch, shuffle=False, num_workers=16)
     except Exception as error:
         logger.error("Error creating data loader: %s", error)
         raise
@@ -276,9 +276,10 @@ def create_data_sampler(
         raise
 
 
-if __name__ == "__main__":
+def main():
     # Load the configuration parameters and the input and output data
     config, data_train, data_test = load_config_and_data()
+    # mp.set_start_method("spawn")
 
     try:
         # TODO fix this ugly naming and difference from CNN and test/train meaning
@@ -311,41 +312,41 @@ if __name__ == "__main__":
                 edge_index_in,
                 nodes_in,
                 config["batch_size"],
-                config["num_workers"],
+                16,
             )
             loader_train_out = create_data_sampler(
                 data_train_out,
                 edge_index_out,
                 nodes_out,
                 config["batch_size"],
-                config["num_workers"],
+                16,
             )
             loader_test_in = create_data_sampler(
                 data_test_in,
                 edge_index_in,
                 nodes_in,
                 config["batch_size"],
-                config["num_workers"],
+                16,
             )
             loader_test_out = create_data_sampler(
                 data_test_out,
                 edge_index_out,
                 nodes_out,
                 config["batch_size"],
-                config["num_workers"],
+                16,
             )
         else:
             loader_train_in = create_data_loader(
-                data_train_in, edge_index_in, nodes_in, config["batch_size"]
+                data_train_in, edge_index_in, nodes_in, 1
             )
             loader_train_out = create_data_loader(
-                data_train_out, edge_index_out, nodes_out, config["batch_size"]
+                data_train_out, edge_index_out, nodes_out, 1
             )
             loader_test_in = create_data_loader(
-                data_test_in, edge_index_in, nodes_in, config["batch_size"]
+                data_test_in, edge_index_in, nodes_in, 1
             )
             loader_test_out = create_data_loader(
-                data_test_out, edge_index_out, nodes_out, config["batch_size"]
+                data_test_out, edge_index_out, nodes_out, 1
             )
     except (IndexError, TypeError) as e:
         logger.exception("Error occurred while creating data loaders: %s", e)
@@ -353,7 +354,7 @@ if __name__ == "__main__":
     try:
         # loss_fn: nn.CrossEntropyLoss = nn.CrossEntropyLoss()
         loss_fn = nn.L1Loss()
-
+        # loss_fn = EnsembleVarRegLoss()
         if isinstance(loss_fn, MaskedLoss):
             # Create a mask that masks all cells that stay constant over all time steps
             variance = data_train.var(dim="time")
@@ -365,7 +366,8 @@ if __name__ == "__main__":
             mask = None
     except (ValueError, TypeError) as e:
         logger.exception("Error occurred while creating loss function: %s", e)
-    artifact_path, experiment_name = setup_mlflow()
+    _, experiment_name = setup_mlflow()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     try:
         if config["retrain"]:
             gnn_config = GNNConfig(
@@ -384,7 +386,6 @@ if __name__ == "__main__":
                 mode="triangular2",
                 cycle_momentum=False,
             )
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
             # Train the model with MLflow logging
             MLFlowLogger(experiment_name=experiment_name)
@@ -405,38 +406,36 @@ if __name__ == "__main__":
                     )
                 )
                 # Pass the TrainingConfig object to the train method
-                if torch.cuda.device_count() > 1:
-                    logger.info(
-                        "Using %d GPUs for Evaluation", torch.cuda.device_count()
-                    )
-                    model = cast(GNNModel, nn.DataParallel(model).module)
-                model.train_with_configs(config_train)
+                logger.info("Using %d GPUs for Training", torch.cuda.device_count())
 
+                # world_size = torch.cuda.device_count()
+                # mp.spawn(
+                #     model.train_with_configs,
+                #     args=(
+                #         config_train,
+                #         world_size,
+                #     ),
+                #     nprocs=world_size,
+                #     join=True,
+                # )
+                model.train_with_configs(config_train)
         else:
-            # Load the best model from the most recent MLflow run
-            model_best = load_best_model(experiment_name)
-            if isinstance(model_best, GNNModel):
-                model = model_best
-            else:
-                model = cast(GNNModel, model_best)
+            artifact_path, experiment_name = setup_mlflow()
+            load_best_model(experiment_name)
+
     except mlflow.exceptions.MlflowException as e:
         logger.exception("Error occurred while setting up MLflow: %s", e)
 
     try:
-        y_pred: List[torch.Tensor] = []
-        # Evaluate the model on the test data
-        # pylint: disable=R0801
+        y_pred: List[torch.Tensor] = []  # pylint: disable=R0801
         config_eval = EvaluationConfigGNN(
             loader_in=loader_test_in,
             loader_out=loader_test_out,
             loss_fn=loss_fn,
             mask=mask,
-            device=config["device"],
+            device=device,
             seed=config["seed"],
         )
-        if torch.cuda.device_count() > 1:
-            logger.info("Using %d GPUs for Training", torch.cuda.device_count())
-            model = cast(GNNModel, nn.DataParallel(model).module)
         test_loss, y_pred = model.eval_with_configs(config_eval)
         # test_loss = test_loss.mean().item()
         logger.info("Best model test loss: %f", test_loss)
@@ -444,7 +443,7 @@ if __name__ == "__main__":
         logger.exception("Error occurred while evaluating model: %s", e)
     try:
         # Plot the predictions
-
+        # TODO: This might have changed check data_test_out dims
         y_pred_reshaped = xr.DataArray(
             torch.cat(y_pred).numpy().reshape((np.array(data_test_out.values).shape)),
             dims=["time", "member", "height", "ncells"],
@@ -458,10 +457,18 @@ if __name__ == "__main__":
             "data_test": data_test,
         }
 
-        for i in range(10):
-            member = random.randint(
-                0, data_test.sizes["member"] - config["member_split"] - 1
+        test_out_members = data_test_set.get_test_indices()
+
+        for member_pred, member_target in enumerate(test_out_members):
+            create_animation(
+                data_gif,
+                member_pred=member_pred,
+                member_target=member_target,
+                preds="GNN",
             )
-            output_filename = create_animation(data_gif, member=member, preds="GNN")
     except (ValueError, TypeError) as e:
         logger.exception("Error occurred while creating animation: %s", e)
+
+
+if __name__ == "__main__":
+    main()
