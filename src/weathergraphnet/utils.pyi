@@ -4,7 +4,7 @@ from typing import List
 from typing import Tuple
 
 # Third-party
-import mlflow  # type: ignore
+import mlflow as mlflow  # type: ignore
 import numpy as np
 import xarray as xr
 from _typeshed import Incomplete
@@ -13,6 +13,7 @@ from torch import nn
 from torch.utils.data import Dataset
 
 # First-party
+from weathergraphnet.create_gif import get_member_name as get_member_name
 from weathergraphnet.logger import setup_logger as setup_logger
 
 logger: Incomplete
