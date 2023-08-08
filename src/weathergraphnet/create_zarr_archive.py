@@ -9,8 +9,8 @@ import numcodecs  # type: ignore
 import xarray as xr
 
 # First-party
-from weathergraphnet.logger import setup_logger
-from weathergraphnet.utils import load_config
+from weathergraphnet.loggers_configs import setup_logger
+from weathergraphnet.loggers_configss_configs import load_config
 
 config_dict = load_config()
 
@@ -74,7 +74,8 @@ def load_data(config: dict) -> None:
 
                     # Specify the encoding for theta_v
                     if "theta_v" in data:
-                        data["theta_v"].encoding = {"compressor": config["compressor"]}
+                        data["theta_v"].encoding = {
+                            "compressor": config["compressor"]}
 
                     data = data.assign_coords(member=match.group(1))
                     data = data.expand_dims({"member": 1})

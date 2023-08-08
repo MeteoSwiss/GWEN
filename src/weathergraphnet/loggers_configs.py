@@ -1,13 +1,16 @@
 """Provide logging for the weathergraphnet package."""
 # Standard library
+import json
 import logging
+
+from pyprojroot import here
 
 # Third-party
 from torch import distributed as dist
 
 # Create a logger object
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 
 def setup_logger() -> logging.Logger:
@@ -49,3 +52,12 @@ def setup_logger() -> logging.Logger:
     logger.addHandler(file_handler)
 
     return logger
+
+
+def load_config():
+    """Load the configuration for the weathergraphnet project."""
+    with open(
+        str(here()) + "/src/weathergraphnet/config.json", "r", encoding="UTF-8"
+    ) as f:
+        config = json.load(f)
+    return config

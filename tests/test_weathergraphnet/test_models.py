@@ -90,7 +90,7 @@ class TestGNNModel(unittest.TestCase):
 
 
 class TestUNet(unittest.TestCase):
-    # TODO test with different input shapes
+    # HACK test with different input shapes
     def setUp(self):
         self.channels_in = 100
         self.channels_out = 25
