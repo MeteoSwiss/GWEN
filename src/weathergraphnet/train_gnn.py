@@ -63,16 +63,16 @@ from torch_geometric.loader import DataLoader  # type: ignore
 from torch_geometric.utils import erdos_renyi_graph  # type: ignore
 
 # First-party
-from weathergraphnet.logger import setup_logger
+from weathergraphnet.loggers_configs import setup_logger
+from weathergraphnet.loss_functions import MaskedLoss
 from weathergraphnet.models_gnn import EvaluationConfigGNN
 from weathergraphnet.models_gnn import GNNConfig
 from weathergraphnet.models_gnn import GNNModel
 from weathergraphnet.models_gnn import TrainingConfigGNN
+from weathergraphnet.utils import MyDataset
 from weathergraphnet.utils import create_animation
 from weathergraphnet.utils import load_best_model
 from weathergraphnet.utils import load_config_and_data
-from weathergraphnet.utils import MaskedLoss
-from weathergraphnet.utils import MyDataset
 from weathergraphnet.utils import setup_mlflow
 
 logger = setup_logger()
@@ -249,13 +249,16 @@ def create_data_sampler(
                         dim=0,
                     )
                     subgraph.edge_index = torch.cat(
-                        [subgraph.edge_index, torch.zeros((2, max_nodes - num_nodes))],
+                        [subgraph.edge_index, torch.zeros(
+                            (2, max_nodes - num_nodes))],
                         dim=1,
                     )
 
             # Convert the subgraphs and labels to tensors
-            labels_batch = [torch.cat(labels, dim=0) for labels in zip(*labels_batch)]
-            labels_batch = [torch.cat(labels, dim=0) for labels in zip(*labels_batch)]
+            labels_batch = [torch.cat(labels, dim=0)
+                            for labels in zip(*labels_batch)]
+            labels_batch = [torch.cat(labels, dim=0)
+                            for labels in zip(*labels_batch)]
 
             return subgraphs, *labels_batch
 
@@ -284,11 +287,15 @@ def main():
     try:
         # TODO fix this ugly naming and difference from CNN and test/train meaning
         data_train_set = MyDataset(data_train, config["member_split"])
-        data_train_in = data_train_set.data.isel(member=data_train_set.train_indices)
-        data_train_out = data_train_set.data.isel(member=data_train_set.test_indices)
+        data_train_in = data_train_set.data.isel(
+            member=data_train_set.train_indices)
+        data_train_out = data_train_set.data.isel(
+            member=data_train_set.test_indices)
         data_test_set = MyDataset(data_test, config["member_split"])
-        data_test_in = data_test_set.data.isel(member=data_test_set.train_indices)
-        data_test_out = data_test_set.data.isel(member=data_test_set.test_indices)
+        data_test_in = data_test_set.data.isel(
+            member=data_test_set.train_indices)
+        data_test_out = data_test_set.data.isel(
+            member=data_test_set.test_indices)
     except IndexError as e:
         logger.exception("Error occurred while creating datasets: %s", e)
     try:
@@ -301,7 +308,8 @@ def main():
         edge_index_in = erdos_renyi_graph(nodes_in, edge_prob=1)
         edge_index_out = erdos_renyi_graph(nodes_out, edge_prob=1)
     except IndexError as e:
-        logger.exception("Error occurred while defining GNN architecture: %s", e)
+        logger.exception(
+            "Error occurred while defining GNN architecture: %s", e)
 
     try:
         # Create data loaders
@@ -360,8 +368,8 @@ def main():
             variance = data_train.var(dim="time")
             # Create a mask that hides all data with zero variance
             mask = variance <= config["mask_threshold"]
-            logger.info("Number of masked cells: %d", (mask[0].values == 1).sum())
-            logger.info("Number of masked cells: %d", (mask[0].values == 1).sum())
+            logger.info("Number of masked cells: %d",
+                        (mask[0].values == 1).sum())
         else:
             mask = None
     except (ValueError, TypeError) as e:
@@ -406,7 +414,8 @@ def main():
                     )
                 )
                 # Pass the TrainingConfig object to the train method
-                logger.info("Using %d GPUs for Training", torch.cuda.device_count())
+                logger.info("Using %d GPUs for Training",
+                            torch.cuda.device_count())
 
                 # world_size = torch.cuda.device_count()
                 # mp.spawn(
@@ -421,7 +430,7 @@ def main():
                 model.train_with_configs(config_train)
         else:
             artifact_path, experiment_name = setup_mlflow()
-            load_best_model(experiment_name)
+            model = load_best_model(experiment_name)
 
     except mlflow.exceptions.MlflowException as e:
         logger.exception("Error occurred while setting up MLflow: %s", e)
@@ -445,11 +454,13 @@ def main():
         # Plot the predictions
         # TODO: This might have changed check data_test_out dims
         y_pred_reshaped = xr.DataArray(
-            torch.cat(y_pred).numpy().reshape((np.array(data_test_out.values).shape)),
+            torch.cat(y_pred).numpy().reshape(
+                (np.array(data_test_out.values).shape)),
             dims=["time", "member", "height", "ncells"],
         )
         logger.info(
-            "The shape of the raw model prediction: %s", torch.cat(y_pred).numpy().shape
+            "The shape of the raw model prediction: %s", torch.cat(
+                y_pred).numpy().shape
         )
         logger.info("Reshaped into form: %s", y_pred_reshaped.shape)
         data_gif = {
@@ -457,7 +468,7 @@ def main():
             "data_test": data_test,
         }
 
-        test_out_members = data_test_set.get_test_indices()
+        test_out_members = data_test_set.get_target_indices()
 
         for member_pred, member_target in enumerate(test_out_members):
             create_animation(

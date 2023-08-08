@@ -114,3 +114,4 @@ output
 data
 mlruns
 src/weathergraphnet/example_gnn.py
+src/weathergraphnet/SAL.py

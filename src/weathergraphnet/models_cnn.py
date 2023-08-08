@@ -11,15 +11,16 @@ from typing import Union
 import mlflow  # type: ignore  # type: ignore  # type: ignore
 import torch
 from pytorch_lightning.loggers import MLFlowLogger
+from torch import distributed as dist
 from torch import nn
 from torch.optim import Adam
 from torch.optim.lr_scheduler import CyclicLR
 from torch.optim.lr_scheduler import StepLR
+from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
-from torch_geometric.loader import DataLoader  # type: ignore
 
 # First-party
-from weathergraphnet.logger import setup_logger
+from weathergraphnet.loggers_configs import setup_logger
 from weathergraphnet.utils import MyDataset
 from weathergraphnet.utils import setup_mlflow
 
@@ -375,12 +376,12 @@ class Decoder(BaseNet):
             out = nn.functional.pad(
                 out, (cropped * 2, 0, 0, 0), mode="replicate")
 
-            if torch.distributed.get_rank() == 0:
+            if dist.get_rank() == 0:
                 logged_messages = set()
                 # Log the messages after each epoch, but only if they haven't been
                 # logged before
                 if "Shapes of the UNET" not in logged_messages:
-                    logger.info("Shapes of the UNET")
+                    logger.debug("Shapes of the UNET")
                     logged_messages.add("Shapes of the UNET")
                 variables = [
                     ("X1", x1),
@@ -395,7 +396,7 @@ class Decoder(BaseNet):
                 for name, var in variables:
                     message = f"{name}: {var.shape}"
                     if message not in logged_messages:
-                        logger.info(message)
+                        logger.debug(message)
                         logged_messages.add(message)
 
         except ValueError as e:
@@ -448,8 +449,8 @@ class UNet(BaseNet):
                 out = nn.functional.pad(
                     out, (x.shape[3] - out.shape[3], 0, 0, 0), mode="replicate"
                 )  # pad the output tensor
-            if torch.distributed.get_rank() == 0:
-                logger.info(f"OUT: {out.shape}")
+            if dist.get_rank() == 0:
+                logger.info(f"Output UNet shape: {out.shape}")
 
         except RuntimeError as e:
             logger.error(
@@ -470,26 +471,27 @@ class UNet(BaseNet):
         None
 
         """
+
         os.environ["MASTER_ADDR"] = "localhost"
         os.environ["MASTER_PORT"] = "12355"  # choose an available port
         os.environ["TORCH_DISTRIBUTED_DEBUG"] = "INFO"
         torch.cuda.set_device(rank)
-        torch.distributed.init_process_group(
+        dist.init_process_group(
             "nccl", rank=rank, world_size=world_size)
-        if torch.distributed.get_rank() == 0:
+        if dist.get_rank() == 0:
             print("Training UNet network with configurations:", flush=True)
             print(configs_train_cnn, flush=True)
         torch.manual_seed(configs_train_cnn.seed)
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(configs_train_cnn.seed)
 
-        if torch.distributed.get_rank() == 0:
+        if dist.get_rank() == 0:
             # Train the model with MLflow logging
             artifact_path, experiment_name = setup_mlflow()
             MLFlowLogger(experiment_name=experiment_name)
             mlflow.start_run()
 
-        sampler = DistributedSampler(configs_train_cnn.dataset)
+        sampler = DistributedSampler(configs_train_cnn.dataset, seed=configs_train_cnn.seed)
         dataloader = DataLoader(
             configs_train_cnn.dataset, configs_train_cnn.batch_size, sampler=sampler,
             num_workers=16, pin_memory=True
@@ -501,7 +503,7 @@ class UNet(BaseNet):
             model, find_unused_parameters=True)
         if configs_train_cnn.mask is not None:
             configs_train_cnn.mask = configs_train_cnn.mask.to(device)
-
+        best_loss = torch.tensor(float("inf")).to(device)
         try:
             for epoch in range(configs_train_cnn.epochs):
                 sampler.set_epoch(epoch)
@@ -528,10 +530,11 @@ class UNet(BaseNet):
                 avg_loss = torch.tensor(running_loss /
                                         float(len(dataloader))).to(device)
                 gathered_losses = [torch.zeros_like(avg_loss) for _ in range(
-                    torch.distributed.get_world_size())] if torch.distributed.get_rank() == 0 else []
-                torch.distributed.gather(
+                    dist.get_world_size())] if dist.get_rank() == 0 else []
+                dist.gather(
                     avg_loss, gather_list=gathered_losses, dst=0)
-                if torch.distributed.get_rank() == 0:
+                torch.distributed.barrier()  # Wait for all workers to finish
+                if dist.get_rank() == 0:
                     avg_loss_gathered = torch.stack(
                         gathered_losses).mean().item()
                     logger.info("Epoch: %d, Loss: %f",
@@ -539,21 +542,22 @@ class UNet(BaseNet):
                     mlflow.log_metric("loss", float(
                         avg_loss_gathered), step=epoch)
                     # mlflow.pytorch.log_model(model, f"model_epoch_{epoch}")
-                    best_loss = torch.tensor(float("inf")).to(device)
+
                     if avg_loss_gathered < best_loss:
                         best_loss = avg_loss_gathered
-                        mlflow.pytorch.log_model(model.module, "models")
+                        mlflow.pytorch.log_model(model.module, "models", pip_requirements=[
+                            f"torch=={torch.__version__}"])
 
         except RuntimeError as e:
             logger.error(
                 "Error occurred while training UNet: %s", str(e))
-
-        if torch.distributed.get_rank() == 0:
+        if dist.get_rank() == 0:
             mlflow.end_run()
+            dist.destroy_process_group()
 
     def eval_with_configs(
-        self, configs_eval_cnn: EvaluationConfigCNN
-    ) -> Tuple[float, List[torch.Tensor]]:
+        self, rank, configs_eval_cnn, world_size: EvaluationConfigCNN, queue, event
+    ):
         """Evaluate the model.
 
         Args:
@@ -563,16 +567,37 @@ class UNet(BaseNet):
         - loss (float): The loss achieved during evaluation.
 
         """
+        os.environ["MASTER_ADDR"] = "localhost"
+        os.environ["MASTER_PORT"] = "12355"  # choose an available port
+        os.environ["TORCH_DISTRIBUTED_DEBUG"] = "INFO"
+        torch.cuda.set_device(rank)
+        dist.init_process_group(
+            "nccl", rank=rank, world_size=1)
+        # dist.init_process_group(
+        #     "nccl", rank=rank, world_size=world_size) #TODO: eval on >1 GPU
+        if dist.get_rank() == 0:
+            print("Training UNet network with configurations:", flush=True)
+            print(configs_eval_cnn, flush=True)
+        torch.manual_seed(configs_eval_cnn.seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(configs_eval_cnn.seed)
+
+        sampler = DistributedSampler(
+            configs_eval_cnn.dataset, shuffle=False, drop_last=False)
         dataloader_test = DataLoader(
-            configs_eval_cnn.dataset, configs_eval_cnn.batch_size, num_workers=16, pin_memory=True)
+            configs_eval_cnn.dataset, configs_eval_cnn.batch_size, sampler=sampler,
+            num_workers=16, pin_memory=True)
         device = configs_eval_cnn.device
-        model = self.module.to(device)
+        model = self.to(device)
+        model = nn.parallel.DistributedDataParallel(
+            model, find_unused_parameters=True)
+        ranks = []
         try:
             model.eval()
             with torch.no_grad():
                 loss: float = 0.0
                 y_preds: List[torch.Tensor] = []
-                for input_data, target_data in dataloader_test:
+                for i, (input_data, target_data) in enumerate(dataloader_test):
                     input_data = input_data.to(device)
                     target_data = target_data.to(device)
                     # pylint: disable=not-callable
@@ -587,9 +612,44 @@ class UNet(BaseNet):
                         )
                     else:
                         loss += configs_eval_cnn.loss_fn(output, target_data)
-                    y_preds.append(output.cpu())
-                loss /= len(configs_eval_cnn.dataloader)
+                    ranks.append(rank)
+                    y_preds.append(output)
+
+                avg_loss = torch.tensor(loss.item() /
+                                        float(len(dataloader_test))).to(device)
+                gathered_losses = [torch.zeros_like(avg_loss) for _ in range(
+                    dist.get_world_size())] if dist.get_rank() == 0 else []
+
+                ranks_tensor = torch.tensor(ranks, device=device)
+                ranks_list = [torch.zeros_like(ranks_tensor)
+                              for _ in range(dist.get_world_size())]
+                y_preds_tensor = torch.cat(y_preds)
+                y_preds_list = [torch.zeros_like(y_preds_tensor)
+                                for _ in range(dist.get_world_size())]
+
+                dist.barrier()
+                dist.all_gather(ranks_list, ranks_tensor)
+                dist.all_gather(y_preds_list, y_preds_tensor)
+                dist.gather(avg_loss, gather_list=gathered_losses, dst=0)
+
+                y_preds_ordered = [y_pred for _, y_pred in sorted(
+                    zip(ranks_list, y_preds_list), key=lambda x: x[0])]
+
+                dist.barrier()
+                if dist.get_rank() == 0:
+                    avg_loss_gathered = torch.stack(
+                        gathered_losses).mean().item()
+                    y_preds_ordered_tensor = torch.cat(y_preds_ordered)
+                    logger.info("Loss: %f", avg_loss_gathered)
+
         except RuntimeError as e:
             logger.error(
                 "Error occurred while evaluating UNet network: %s", str(e))
-        return loss, y_preds
+        finally:
+            dist.barrier()
+            torch.cuda.synchronize()
+            if dist.get_rank() == 0:
+                queue.put((float(avg_loss_gathered),
+                          y_preds_ordered_tensor.cpu()))
+            dist.barrier()
+            dist.destroy_process_group()

@@ -19,7 +19,7 @@ from torch_geometric.nn import GCNConv  # type: ignore
 from torch_geometric.nn import TopKPooling
 
 # First-party
-from weathergraphnet.logger import setup_logger
+from weathergraphnet.loggers_configs import setup_logger
 
 logger = setup_logger()
 
@@ -361,9 +361,9 @@ class GNNModel(torch.nn.Module):
         # os.environ["MASTER_ADDR"] = "localhost"
         # os.environ["MASTER_PORT"] = "12355"  # choose an available port
         # torch.cuda.set_device(rank)
-        # torch.distributed.init_process_group(
+        # dist.init_process_group(
         #     "nccl", rank=rank, world_size=world_size)
-        # if torch.distributed.get_rank() == 0:
+        # if dist.get_rank() == 0:
         print("Training UNet network with configurations:", flush=True)
         print(configs_train_gnn, flush=True)
         # Set the seed for reproducibility
@@ -382,7 +382,8 @@ class GNNModel(torch.nn.Module):
             for epoch in range(configs_train_gnn.epochs):
                 running_loss = 0.0
                 for data_in, data_out in zip(
-                    configs_train_gnn.loader_train_in, configs_train_gnn.loader_train_out
+                    configs_train_gnn.loader_train_in,
+                    configs_train_gnn.loader_train_out
                 ):
                     data_in = data_in.to(device)
                     data_out = data_out.to(device)
@@ -419,11 +420,11 @@ class GNNModel(torch.nn.Module):
                 avg_loss = running_loss / \
                     float(len(configs_train_gnn.loader_train_in))
                 # gathered_losses = [torch.zeros_like(avg_loss) for _ in range(
-                #     torch.distributed.get_world_size())] if torch.distributed.get_rank() == 0 else []
-                # torch.distributed.gather(
+                #     dist.get_world_size())] if dist.get_rank() == 0 else []
+                # dist.gather(
                 #     avg_loss, gather_list=gathered_losses, dst=0)
 
-                # if torch.distributed.get_rank() == 0:
+                # if dist.get_rank() == 0:
                 # avg_loss = torch.stack(gathered_losses).mean().item()
                 logger.info("Epoch: %d, Loss: %f4", epoch, avg_loss)
                 mlflow.log_metric("loss", avg_loss)
