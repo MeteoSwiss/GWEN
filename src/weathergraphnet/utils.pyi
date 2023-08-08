@@ -14,23 +14,27 @@ from torch.utils.data import Dataset
 
 # First-party
 from weathergraphnet.create_gif import get_member_name as get_member_name
-from weathergraphnet.logger import setup_logger as setup_logger
+from weathergraphnet.loggers_configs import setup_logger as setup_logger
 
 logger: Incomplete
+
 
 class CRPSLoss(nn.Module):
     def __init__(self) -> None: ...
     def forward(self, outputs: Any, target: Any, dim: int = ...) -> Any: ...
+
 
 class EnsembleVarRegLoss(nn.Module):
     alpha: Incomplete
     def __init__(self, alpha: float = ...) -> None: ...
     def forward(self, outputs: Any, target: Any) -> Any: ...
 
+
 class MaskedLoss(nn.Module):
     loss_fn: Incomplete
     def __init__(self, loss_fn: nn.Module) -> None: ...
     def forward(self, outputs: Any, target: Any, mask: Any) -> Any: ...
+
 
 class MyDataset(Dataset):
     data: Incomplete
@@ -41,6 +45,7 @@ class MyDataset(Dataset):
     def __len__(self) -> int: ...
     def __getitem__(self, idx: int) -> Tuple[np.ndarray, np.ndarray]: ...
     def __iter__(self): ...
+
 
 def animate(
     data: xr.Dataset, member: int = ..., preds: str = ...

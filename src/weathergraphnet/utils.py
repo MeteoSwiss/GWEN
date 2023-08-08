@@ -1,9 +1,6 @@
 """Utility functions and classes for the WeatherGraphNet project.
 
 Classes:
-    CRPSLoss: Continuous Ranked Probability Score (CRPS) loss function.
-    EnsembleVarRegLoss: Ensemble variance regularization loss function.
-    MaskedLoss: Masked loss function.
     MyDataset: Custom dataset class.
 
 Functions:
@@ -19,7 +16,6 @@ Functions:
 
 """
 # Standard library
-import json
 import os
 import socket
 import warnings
@@ -42,174 +38,15 @@ from numpy import dtype
 from numpy import signedinteger
 from pyprojroot import here
 from torch import nn
-from torch.distributions import Normal
 from torch.utils.data import Dataset
 
 # First-party
 from weathergraphnet.create_gif import get_member_name
-from weathergraphnet.logger import setup_logger
+from weathergraphnet.loggers_configs import load_config
+from weathergraphnet.loggers_configs import setup_logger
 
 logger = setup_logger()
-
-
-class CRPSLoss(nn.Module):
-    """Continuous Ranked Probability Score (CRPS) loss function.
-
-    This class implements the CRPS loss function, which is used to eval the
-    performance of probabilistic regression models.
-
-    Args:
-        nn.Module: PyTorch module.
-
-    Returns:
-        crps_loss: CRPS loss for each sample in the batch.
-
-    """
-
-    def __init__(self) -> None:
-        """Initialize the CRPS loss function."""
-        super().__init__()
-
-    def forward(self, outputs: Any, target: Any, dim: int = 0) -> Any:
-        """Calculate the CRPS loss for each sample in the batch.
-
-        This method calculates the CRPS loss for each sample in the batch using the
-        predicted values and target values.
-
-        Args:
-            outputs: Predicted values.
-            target: Target values.
-            dim: Dimension over which to calculate the mean and standard deviation.
-
-        Returns:
-            crps_loss: CRPS loss for each sample in the batch.
-
-        """
-        # Calculate the mean and standard deviation of the predicted distribution
-        try:
-            mu = torch.mean(outputs, dim=dim)  # Mean over ensemble members
-            # Stddev over ensemble members
-            sigma = torch.std(outputs, dim=dim) + 1e-6
-
-            # Create a normal distribution with the predicted mean and standard
-            # deviation
-            dist = Normal(mu, sigma)
-
-            # Calculate the CRPS loss for each sample in the batch Mean over ensemble
-            # members and spatial locations
-            crps_loss = torch.mean((dist.cdf(target) - 0.5) ** 2, dim=[1, 2, 3])
-
-            return crps_loss
-        except Exception as e:
-            logger.exception("Error calculating CRPS loss: %s", e)
-            raise
-
-
-class EnsembleVarRegLoss(nn.Module):
-    """Ensemble variance regularization loss function.
-
-    This class implements the ensemble variance regularization loss function, which is
-    used to improve the performance of probabilistic regression models.
-
-    Args:
-        alpha: Regularization strength.
-
-    Returns:
-        l1_loss + regularization_loss: Loss for each sample in the batch.
-
-    """
-
-    def __init__(self, alpha: float = 0.1) -> None:
-        """Initialize the ensemble variance regularization loss function.
-
-        Args:
-            alpha: Regularization strength.
-
-        """
-        super().__init__()
-        self.alpha = alpha  # Regularization strength
-
-    def forward(self, outputs: Any, target: Any) -> Any:
-        """Calculate the loss for each sample using the specified loss function.
-
-        This method calculates the loss for each sample in the batch using the specified
-        loss function.
-
-        Args:
-            outputs: Predicted values.
-            target: Target values.
-
-        Returns:
-            l1_loss + regularization_loss: Loss for each sample in the batch.
-
-        """
-        try:
-            l1_loss = torch.mean(torch.abs(outputs - target))
-            ensemble_variance = torch.var(outputs, dim=1)
-            regularization_loss = -self.alpha * torch.mean(ensemble_variance)
-            return l1_loss + regularization_loss
-        except Exception as e:
-            logger.exception(
-                "Error calculating ensemble variance regularization loss: %s", e
-            )
-            raise
-
-
-class MaskedLoss(nn.Module):
-    """Masked loss function.
-
-    This class implements the masked loss function, which is used to calculate the loss
-    for each sample in the batch while ignoring certain cells.
-
-    Args:
-        loss_fn: Loss function to use.
-
-    Returns:
-        mean_loss: Mean loss over all unmasked cells.
-
-    """
-
-    def __init__(self, loss_fn: nn.Module) -> None:
-        """Initialize the masked loss function.
-
-        Args:
-            loss_fn: Loss function to use.
-
-        """
-        super().__init__()
-        self.loss_fn = loss_fn
-
-    def forward(self, outputs: Any, target: Any, mask: Any) -> Any:
-        """Calculate the loss for each sample using the specified loss function.
-
-        This method calculates the loss for each sample in the batch using the specified
-        loss function, while ignoring certain cells.
-
-        Args:
-            outputs: Predicted values.
-            target: Target values.
-            mask: Mask for cells where the values stay constant over all observed times.
-
-        Returns:
-            mean_loss: Mean loss over all unmasked cells.
-
-        """
-        try:
-            # Calculate the loss for each sample in the batch using the specified loss
-            # function
-            loss = self.loss_fn(outputs, target)
-
-            # Mask the loss for cells where the values stay constant over all observed
-            # times
-            masked_loss = loss * mask
-
-            # Calculate the mean loss over all unmasked cells
-            mean_loss = torch.sum(masked_loss) / torch.sum(mask)
-
-            return mean_loss
-        except Exception as e:
-            logger.exception("Error calculating masked loss: %s", e)
-            raise
+config = load_config()
 
 
 class MyDataset(Dataset):
@@ -232,7 +69,7 @@ class MyDataset(Dataset):
 
         Args:
             data: The data to use.
-            split: The split between train and test sets.
+            split: The split between input and target sets.
 
         """
         super().__init__()
@@ -251,12 +88,16 @@ class MyDataset(Dataset):
             # Shuffle the member indices
             np.random.shuffle(member_indices)
 
-            # Split the member indices into train and test sets
-            self.train_indices: np.ndarray = member_indices[: self.split]
-            self.test_indices: np.ndarray = member_indices[self.split :]
-            if False:  # TODO: to configs:
-                self.train_indices = np.random.choice(self.train_indices)
-                self.test_indices = np.random.choice(self.test_indices)
+            # Split the member indices into input and target sets
+            self.input_indices: np.ndarray = member_indices[: self.split]
+            self.target_indices: np.ndarray = member_indices[self.split:]
+            if config["simplify"]:
+                simple_input_index = np.random.choice(self.input_indices)
+                self.input_indices = np.array(
+                    [simple_input_index, simple_input_index+1])
+                simple_target_index = simple_input_index + 1
+                self.target_indices = np.array(
+                    [simple_target_index, simple_target_index+1])
 
         except Exception as e:
             logger.exception("Error initializing custom dataset: %s", e)
@@ -271,26 +112,37 @@ class MyDataset(Dataset):
             raise
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Get the data for the train and test sets.
+        """Get the data for the input and target sets.
 
-        This method gets the data for the train and test sets.
+        This method gets the data for the input and target sets.
 
         Args:
             idx: Index of the data.
 
         Returns:
-            x, y: Data for the train and test sets.
+            x, y: Data for the input and target sets.
 
         """
         try:
-            # Get the data for the train and test sets
+            # Get the data for the input and target sets
             # TODO: make sure that no unsqueezing is required to keep member dim
-            x = np.array(self.data.isel(member=self.train_indices, time=idx).values)
-            y = np.array(self.data.isel(member=self.test_indices, time=idx).values)
+
+            if config["simplify"]:
+                x = np.array(self.data.isel(member=slice(
+                    self.input_indices[0], self.input_indices[1]), time=idx).values)
+                y = np.array(self.data.isel(member=slice(
+                    self.target_indices[0], self.target_indices[1]), time=idx).values)
+            else:
+                x = np.array(self.data.isel(
+                    member=self.input_indices, time=idx).values)
+                y = np.array(self.data.isel(
+                    member=self.target_indices, time=idx).values)
+
             x = torch.from_numpy(x)
             y = torch.from_numpy(y)
         except Exception as e:
-            logger.exception("Error getting data for train and test sets: %s", e)
+            logger.exception(
+                "Error getting data for input and target sets: %s", e)
             raise
 
         return x, y
@@ -303,14 +155,14 @@ class MyDataset(Dataset):
             logger.exception("Error getting iterator for dataset: %s", e)
             raise
 
-    def get_test_indices(self) -> np.ndarray:
+    def get_target_indices(self) -> np.ndarray:
         """Get the test indices.
 
         Returns:
             test_indices: Indices for the test set.
 
         """
-        return self.test_indices
+        return self.target_indices
 
 
 def animate(data: xr.Dataset, member: str, preds: str) -> animation.FuncAnimation:
@@ -335,7 +187,8 @@ def animate(data: xr.Dataset, member: str, preds: str) -> animation.FuncAnimatio
         cmap = cm.get_cmap("RdBu_r")
         cmap.set_bad(color="grey")
 
-        im: AxesImage = data.isel(time=0).plot(ax=ax, cmap=cmap, vmin=vmin, vmax=vmax)
+        im: AxesImage = data.isel(time=0).plot(
+            ax=ax, cmap=cmap, vmin=vmin, vmax=vmax)
 
         plt.gca().invert_yaxis()
 
@@ -469,13 +322,15 @@ def downscale_data(data: xr.Dataset, factor: int) -> xr.Dataset:
 
     """
     if not isinstance(factor, int) or factor <= 0:
-        raise ValueError(f"Factor must be a positive integer, but got {factor}")
+        raise ValueError(
+            f"Factor must be a positive integer, but got {factor}")
 
     with dask.config.set(
         dict[str, bool](**{"array.slicing.split_large_chunks": False})
     ):
         # Coarsen the height and ncells dimensions by the given factor
-        data_coarse = data.coarsen(height=factor, ncells=factor).reduce(np.mean)
+        data_coarse = data.coarsen(
+            height=factor, ncells=factor).reduce(np.mean).compute()
         return data_coarse
 
 
@@ -501,7 +356,8 @@ def get_runs(experiment_name: str) -> List[mlflow.entities.Run]:
         else:
             return False
 
-    runs = mlflow.search_runs(experiment_names=[experiment_name])
+    runs = mlflow.search_runs(experiment_names=[experiment_name], order_by=[
+                              "attributes.start_time DESC"])
     filtered_runs = runs[runs.apply(filter_runs, axis=1)]
 
     if len(runs) == 0:
@@ -526,12 +382,14 @@ def load_best_model(experiment_name: str) -> nn.Module:
     """
     try:
         runs = get_runs(experiment_name)
-        # TODO: actually get the best model
+        #[ ]: actually get the best model
 
         run_id: str = runs.iloc[0].run_id  # type: ignore [attr-defined]
         best_model_path = mlflow.get_artifact_uri()
-        best_model_path = os.path.abspath(os.path.join(best_model_path, "../../"))
-        best_model_path = os.path.join(best_model_path, run_id, "artifacts", "models")
+        best_model_path = os.path.abspath(
+            os.path.join(best_model_path, "../../"))
+        best_model_path = os.path.join(
+            best_model_path, run_id, "artifacts", "models")
         if not os.path.exists(best_model_path):
             raise FileNotFoundError(
                 f"Best model path does not exist: {best_model_path}"
@@ -541,15 +399,6 @@ def load_best_model(experiment_name: str) -> nn.Module:
         logger.exception(str(e))
         raise e
     return model
-
-
-def load_config():
-    """Load the configuration for the weathergraphnet project."""
-    with open(
-        str(here()) + "/src/weathergraphnet/config.json", "r", encoding="UTF-8"
-    ) as f:
-        config = json.load(f)
-    return config
 
 
 def load_config_and_data() -> Tuple[dict, xr.Dataset, xr.Dataset]:
@@ -604,7 +453,8 @@ def load_data(config: dict) -> Tuple[xr.Dataset, xr.Dataset]:
     try:
         # Load the training data
         data_train = (
-            xr.open_zarr(str(here()) + config["data_train"]).to_array().squeeze()
+            xr.open_zarr(
+                str(here()) + config["data_train"]).to_array().squeeze()
         )
         data_train = data_train.transpose(
             "time",
@@ -668,7 +518,8 @@ def setup_mlflow() -> Tuple[str, str]:
 def suppress_warnings():
     """Suppresses certain warnings that are not relevant to the user."""
     warnings.simplefilter("always")
-    warnings.filterwarnings("ignore", category=matplotlib.MatplotlibDeprecationWarning)
+    warnings.filterwarnings(
+        "ignore", category=matplotlib.MatplotlibDeprecationWarning)
     warnings.filterwarnings("ignore", message="Setuptools is replacing dist")
     warnings.filterwarnings(
         "ignore",
