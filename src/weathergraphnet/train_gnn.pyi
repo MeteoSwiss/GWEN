@@ -14,8 +14,8 @@ from weathergraphnet.models_gnn import EvaluationConfigGNN as EvaluationConfigGN
 from weathergraphnet.models_gnn import GNNConfig as GNNConfig
 from weathergraphnet.models_gnn import GNNModel as GNNModel
 from weathergraphnet.models_gnn import TrainingConfigGNN as TrainingConfigGNN
+from weathergraphnet.utils import ConvDataset as ConvDataset
 from weathergraphnet.utils import MaskedLoss as MaskedLoss
-from weathergraphnet.utils import MyDataset as MyDataset
 from weathergraphnet.utils import create_animation as create_animation
 from weathergraphnet.utils import load_config_and_data as load_config_and_data
 from weathergraphnet.utils import setup_mlflow as setup_mlflow

@@ -11,13 +11,13 @@ from torch.optim.lr_scheduler import CyclicLR
 from torch.optim.lr_scheduler import StepLR
 
 from weathergraphnet.loggers_configs import setup_logger as setup_logger
-from weathergraphnet.utils import MyDataset as MyDataset
+from weathergraphnet.utils import ConvDataset as ConvDataset
 
 logger: Incomplete
 
 
 class TrainingConfigCNN(dict):
-    dataset: MyDataset
+    dataset: ConvDataset
     optimizer: Union[torch.optim.Optimizer, Adam]
     scheduler: Union[CyclicLR, StepLR]
     loss_fn: Union[nn.Module, nn.MSELoss]
@@ -31,7 +31,7 @@ class TrainingConfigCNN(dict):
 
 
 class EvaluationConfigCNN(dict):
-    dataset: MyDataset
+    dataset: ConvDataset
     loss_fn: Union[nn.Module, nn.MSELoss]
     batch_size: int
     mask: Optional[torch.Tensor]

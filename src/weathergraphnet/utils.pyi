@@ -36,7 +36,7 @@ class MaskedLoss(nn.Module):
     def forward(self, outputs: Any, target: Any, mask: Any) -> Any: ...
 
 
-class MyDataset(Dataset):
+class ConvDataset(Dataset):
     data: Incomplete
     split: Incomplete
     train_indices: Incomplete

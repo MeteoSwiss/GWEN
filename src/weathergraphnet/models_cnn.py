@@ -21,7 +21,7 @@ from torch.utils.data.distributed import DistributedSampler
 
 # First-party
 from weathergraphnet.loggers_configs import setup_logger
-from weathergraphnet.utils import MyDataset
+from weathergraphnet.utils import ConvDataset
 from weathergraphnet.utils import setup_mlflow
 
 logger = setup_logger()
@@ -43,7 +43,7 @@ class TrainingConfigCNN(dict):  # pylint: disable=too-many-instance-attributes
 
     """
 
-    dataset: MyDataset
+    dataset: ConvDataset
     optimizer: Union[torch.optim.Optimizer, Adam]
     scheduler: Union[CyclicLR, StepLR]
     loss_fn: Union[
@@ -72,7 +72,7 @@ class EvaluationConfigCNN(dict):
 
     """
 
-    dataset: MyDataset
+    dataset: ConvDataset
     loss_fn: Union[
         nn.Module,
         nn.MSELoss,
@@ -406,6 +406,13 @@ class Decoder(BaseNet):
         return out
 
 
+def collate_fn(batch):
+    inputs, targets = zip(*batch)
+    inputs = torch.stack([torch.from_numpy(x.values) for x in inputs])
+    targets = torch.stack([torch.from_numpy(y.values) for y in targets])
+    return inputs, targets
+
+
 class UNet(BaseNet):
     """A class representing the UNet network.
 
@@ -491,10 +498,15 @@ class UNet(BaseNet):
             MLFlowLogger(experiment_name=experiment_name)
             mlflow.start_run()
 
-        sampler = DistributedSampler(configs_train_cnn.dataset, seed=configs_train_cnn.seed)
+        sampler = DistributedSampler(
+            configs_train_cnn.dataset, seed=configs_train_cnn.seed)
         dataloader = DataLoader(
-            configs_train_cnn.dataset, configs_train_cnn.batch_size, sampler=sampler,
-            num_workers=16, pin_memory=True
+            configs_train_cnn.dataset,
+            batch_size=configs_train_cnn.batch_size,
+            sampler=sampler,
+            num_workers=16,
+            pin_memory=True,
+            collate_fn=collate_fn  # Add the custom collate function here
         )
 
         device = configs_train_cnn.device
@@ -586,7 +598,7 @@ class UNet(BaseNet):
             configs_eval_cnn.dataset, shuffle=False, drop_last=False)
         dataloader_test = DataLoader(
             configs_eval_cnn.dataset, configs_eval_cnn.batch_size, sampler=sampler,
-            num_workers=16, pin_memory=True)
+            num_workers=16, pin_memory=True, collate_fn=collate_fn)
         device = configs_eval_cnn.device
         model = self.to(device)
         model = nn.parallel.DistributedDataParallel(
@@ -597,7 +609,7 @@ class UNet(BaseNet):
             with torch.no_grad():
                 loss: float = 0.0
                 y_preds: List[torch.Tensor] = []
-                for i, (input_data, target_data) in enumerate(dataloader_test):
+                for input_data, target_data in dataloader_test:
                     input_data = input_data.to(device)
                     target_data = target_data.to(device)
                     # pylint: disable=not-callable

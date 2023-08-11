@@ -17,7 +17,7 @@ from weathergraphnet.loss_functions import MaskedLoss
 from weathergraphnet.models_cnn import EvaluationConfigCNN
 from weathergraphnet.models_cnn import TrainingConfigCNN
 from weathergraphnet.models_cnn import UNet
-from weathergraphnet.utils import MyDataset
+from weathergraphnet.utils import ConvDataset
 from weathergraphnet.utils import create_animation
 from weathergraphnet.utils import load_best_model
 from weathergraphnet.utils import load_config_and_data
@@ -41,8 +41,8 @@ def main():
         logger.info(f"Shape of training data{data_train.shape}")
         logger.info(f"Shape of training data{data_test.shape}")
         # Create the dataset and dataloader
-        dataset = MyDataset(data_train, config["member_split"])
-        dataset_test = MyDataset(data_test, config["member_split"])
+        dataset = ConvDataset(data_train, config["member_split"])
+        dataset_test = ConvDataset(data_test, config["member_split"])
 
         # loss_fn: Union[
         #     EnsembleVarRegLoss, MaskedLoss, nn.MSELoss, nn.Module

@@ -1,7 +1,7 @@
 """Utility functions and classes for the WeatherGraphNet project.
 
 Classes:
-    MyDataset: Custom dataset class.
+    ConvDataset: Custom dataset class.
 
 Functions:
     animate: Animate the prediction evolution.
@@ -39,6 +39,9 @@ from numpy import signedinteger
 from pyprojroot import here
 from torch import nn
 from torch.utils.data import Dataset
+from torch_geometric.data import Data
+from torch_geometric.data import Dataset as Dataset_GNN
+from torch_geometric.utils import erdos_renyi_graph
 
 # First-party
 from weathergraphnet.create_gif import get_member_name
@@ -49,7 +52,7 @@ logger = setup_logger()
 config = load_config()
 
 
-class MyDataset(Dataset):
+class ConvDataset(Dataset):
     """Custom dataset class.
 
     This class implements a custom dataset class, which is used to load and preprocess
@@ -125,21 +128,17 @@ class MyDataset(Dataset):
         """
         try:
             # Get the data for the input and target sets
-            # TODO: make sure that no unsqueezing is required to keep member dim
-
             if config["simplify"]:
-                x = np.array(self.data.isel(member=slice(
-                    self.input_indices[0], self.input_indices[1]), time=idx).values)
-                y = np.array(self.data.isel(member=slice(
-                    self.target_indices[0], self.target_indices[1]), time=idx).values)
+                x = self.data.isel(member=slice(
+                    self.input_indices[0], self.input_indices[1]), time=idx)
+                y = self.data.isel(member=slice(
+                    self.target_indices[0], self.target_indices[1]), time=idx)
             else:
-                x = np.array(self.data.isel(
-                    member=self.input_indices, time=idx).values)
-                y = np.array(self.data.isel(
-                    member=self.target_indices, time=idx).values)
+                x = self.data.isel(
+                    member=self.input_indices, time=idx)
+                y = self.data.isel(
+                    member=self.target_indices, time=idx)
 
-            x = torch.from_numpy(x)
-            y = torch.from_numpy(y)
         except Exception as e:
             logger.exception(
                 "Error getting data for input and target sets: %s", e)
@@ -163,6 +162,51 @@ class MyDataset(Dataset):
 
         """
         return self.target_indices
+
+
+class GraphDataset(Dataset_GNN):
+    def __init__(self, xr_data, split, transform=None, pre_transform=None):
+        self.data = xr_data
+        self.split = split
+        self._indices = None
+        self.transform = transform
+        self.pre_transform = pre_transform
+
+        # Calculate nodes and edges
+        self.nodes = self.data.sizes["member"]
+        self.edge_index = erdos_renyi_graph(self.nodes, edge_prob=1)
+
+        num_members = self.data.sizes["member"]
+        member_indices = np.arange(num_members)
+        np.random.shuffle(member_indices)
+
+        # Determine the split index
+        self.input_indices = member_indices[:self.split]
+        self.target_indices = member_indices[self.split:]
+
+        # Calculate channels
+        self.channels = self.data.sizes["height"] * self.data.sizes["ncells"]
+
+    def len(self):
+        return len(self.data.time)
+
+
+    def get(self, idx):
+        # Load only the necessary data
+        x = self.data.isel(member=np.arange(self.nodes), time=idx).stack(
+            features=["height", "ncells"]).load()
+
+        # Convert to tensor
+        x = torch.tensor(x.values, dtype=torch.float)
+
+        # Create masks for input and target nodes
+        target_mask = torch.zeros(self.nodes, dtype=torch.bool)
+        target_mask[self.target_indices] = 1
+
+        # Create a Data object for the graph
+        data = Data(x=x, edge_index=self.edge_index, target_mask=target_mask)
+
+        return data
 
 
 def animate(data: xr.Dataset, member: str, preds: str) -> animation.FuncAnimation:
@@ -382,7 +426,7 @@ def load_best_model(experiment_name: str) -> nn.Module:
     """
     try:
         runs = get_runs(experiment_name)
-        #[ ]: actually get the best model
+        # [ ]: actually get the best model
 
         run_id: str = runs.iloc[0].run_id  # type: ignore [attr-defined]
         best_model_path = mlflow.get_artifact_uri()

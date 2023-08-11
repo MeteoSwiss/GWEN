@@ -58,9 +58,7 @@ from torch.optim.lr_scheduler import CyclicLR
 from torch.utils.data import BatchSampler
 from torch.utils.data import Sampler
 from torch.utils.data import SequentialSampler
-from torch_geometric.data import Data  # type: ignore
 from torch_geometric.loader import DataLoader  # type: ignore
-from torch_geometric.utils import erdos_renyi_graph  # type: ignore
 
 # First-party
 from weathergraphnet.loggers_configs import setup_logger
@@ -69,7 +67,7 @@ from weathergraphnet.models_gnn import EvaluationConfigGNN
 from weathergraphnet.models_gnn import GNNConfig
 from weathergraphnet.models_gnn import GNNModel
 from weathergraphnet.models_gnn import TrainingConfigGNN
-from weathergraphnet.utils import MyDataset
+from weathergraphnet.utils import GraphDataset
 from weathergraphnet.utils import create_animation
 from weathergraphnet.utils import load_best_model
 from weathergraphnet.utils import load_config_and_data
@@ -78,33 +76,6 @@ from weathergraphnet.utils import setup_mlflow
 logger = setup_logger()
 
 # TODO: add dropout layers to all my models!
-
-
-def create_data_loader(
-    data: xr.Dataset, edge_index: torch.Tensor, nodes: int, batch: int
-) -> DataLoader:
-    """Create a PyTorch DataLoader object from a list of data samples and an edge index.
-
-    Args:
-        data (List): A list of data samples.
-        edge_index (torch.Tensor): The edge index for the graph.
-
-    Returns:
-        A PyTorch DataLoader object.
-
-    """
-    try:
-        dataset = [
-            Data(
-                x=torch.tensor(sample, dtype=torch.float32).view(nodes, -1),
-                edge_index=edge_index,
-            )
-            for sample in np.array(data.values)
-        ]
-        return DataLoader(dataset, batch_size=batch, shuffle=False, num_workers=16)
-    except Exception as error:
-        logger.error("Error creating data loader: %s", error)
-        raise
 
 
 class CustomSampler(Sampler):
@@ -284,80 +255,9 @@ def main():
     config, data_train, data_test = load_config_and_data()
     # mp.set_start_method("spawn")
 
-    try:
-        # TODO fix this ugly naming and difference from CNN and test/train meaning
-        data_train_set = MyDataset(data_train, config["member_split"])
-        data_train_in = data_train_set.data.isel(
-            member=data_train_set.train_indices)
-        data_train_out = data_train_set.data.isel(
-            member=data_train_set.test_indices)
-        data_test_set = MyDataset(data_test, config["member_split"])
-        data_test_in = data_test_set.data.isel(
-            member=data_test_set.train_indices)
-        data_test_out = data_test_set.data.isel(
-            member=data_test_set.test_indices)
-    except IndexError as e:
-        logger.exception("Error occurred while creating datasets: %s", e)
-    try:
-        # Define the Graph Neural Network architecture
-        nodes_in = data_train_in.shape[1]
-        nodes_out = data_train_out.shape[1]
-        channels_in = data_train_in.shape[2] * data_train_in.shape[3]
-        channels_out = data_train_out.shape[2] * data_train_out.shape[3]
-        # Define the edge indices for the graph
-        edge_index_in = erdos_renyi_graph(nodes_in, edge_prob=1)
-        edge_index_out = erdos_renyi_graph(nodes_out, edge_prob=1)
-    except IndexError as e:
-        logger.exception(
-            "Error occurred while defining GNN architecture: %s", e)
-
-    try:
-        # Create data loaders
-        sample = False
-        if sample:
-            loader_train_in = create_data_sampler(
-                data_train_in,
-                edge_index_in,
-                nodes_in,
-                config["batch_size"],
-                16,
-            )
-            loader_train_out = create_data_sampler(
-                data_train_out,
-                edge_index_out,
-                nodes_out,
-                config["batch_size"],
-                16,
-            )
-            loader_test_in = create_data_sampler(
-                data_test_in,
-                edge_index_in,
-                nodes_in,
-                config["batch_size"],
-                16,
-            )
-            loader_test_out = create_data_sampler(
-                data_test_out,
-                edge_index_out,
-                nodes_out,
-                config["batch_size"],
-                16,
-            )
-        else:
-            loader_train_in = create_data_loader(
-                data_train_in, edge_index_in, nodes_in, 1
-            )
-            loader_train_out = create_data_loader(
-                data_train_out, edge_index_out, nodes_out, 1
-            )
-            loader_test_in = create_data_loader(
-                data_test_in, edge_index_in, nodes_in, 1
-            )
-            loader_test_out = create_data_loader(
-                data_test_out, edge_index_out, nodes_out, 1
-            )
-    except (IndexError, TypeError) as e:
-        logger.exception("Error occurred while creating data loaders: %s", e)
+    data_train_set = GraphDataset(data_train, config["member_split"])
+    print("Data Type: ", type(data_train_set))
+    data_test_set = GraphDataset(data_test, config["member_split"])
 
     try:
         # loss_fn: nn.CrossEntropyLoss = nn.CrossEntropyLoss()
@@ -374,16 +274,16 @@ def main():
             mask = None
     except (ValueError, TypeError) as e:
         logger.exception("Error occurred while creating loss function: %s", e)
-    _, experiment_name = setup_mlflow()
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     try:
         if config["retrain"]:
             gnn_config = GNNConfig(
-                nodes_in=nodes_in,
-                nodes_out=nodes_out,
-                channels_in=channels_in,
-                channels_out=channels_out,
-                hidden_feats=64,
+                nodes_in=len(data_train_set.input_indices),
+                nodes_out=len(data_train_set.target_indices),
+                channels_in=data_train_set.channels,
+                channels_out=data_train_set.channels,
+                hidden_feats=config["hidden_feats"],
             )
             model = GNNModel(gnn_config)
             optimizer = optim.Adam(model.parameters())
@@ -396,20 +296,21 @@ def main():
             )
 
             # Train the model with MLflow logging
+            _, experiment_name = setup_mlflow()
             MLFlowLogger(experiment_name=experiment_name)
             with mlflow.start_run():
                 # Train the model Create a TrainingConfig object that contains both the
                 # local variables and the JSON parameters
                 config_train = (
                     TrainingConfigGNN(  # pylint: disable=too-many-function-args
-                        loader_train_in=loader_train_in,
-                        loader_train_out=loader_train_out,
+                        dataloader=data_train_set,
                         optimizer=optimizer,
                         scheduler=scheduler,
                         loss_fn=loss_fn,
                         mask=mask,
                         epochs=config["epochs"],
                         device=device,
+                        batch_size=config["batch_size"],
                         seed=config["seed"],
                     )
                 )
@@ -438,11 +339,11 @@ def main():
     try:
         y_pred: List[torch.Tensor] = []  # pylint: disable=R0801
         config_eval = EvaluationConfigGNN(
-            loader_in=loader_test_in,
-            loader_out=loader_test_out,
+            dataloader=data_test_set,
             loss_fn=loss_fn,
             mask=mask,
             device=device,
+            batch_size=config["batch_size"],
             seed=config["seed"],
         )
         test_loss, y_pred = model.eval_with_configs(config_eval)
@@ -453,9 +354,13 @@ def main():
     try:
         # Plot the predictions
         # TODO: This might have changed check data_test_out dims
+
+        for i in range(len(y_pred)):
+            y_pred[i] = y_pred[i][data_test_set.target_indices]
+
         y_pred_reshaped = xr.DataArray(
             torch.cat(y_pred).numpy().reshape(
-                (np.array(data_test_out.values).shape)),
+                data_test.isel(member=data_test_set.target_indices).shape),
             dims=["time", "member", "height", "ncells"],
         )
         logger.info(
@@ -468,7 +373,7 @@ def main():
             "data_test": data_test,
         }
 
-        test_out_members = data_test_set.get_target_indices()
+        test_out_members = data_test_set.target_indices
 
         for member_pred, member_target in enumerate(test_out_members):
             create_animation(
@@ -476,6 +381,13 @@ def main():
                 member_pred=member_pred,
                 member_target=member_target,
                 preds="GNN",
+            )
+        for member_pred, member_target in enumerate(test_out_members):
+            create_animation(
+                data_gif,
+                member_pred=member_pred,
+                member_target=member_target,
+                preds="ICON",
             )
     except (ValueError, TypeError) as e:
         logger.exception("Error occurred while creating animation: %s", e)

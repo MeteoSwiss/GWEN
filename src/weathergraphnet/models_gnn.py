@@ -1,25 +1,24 @@
 """Contains the models used for weather prediction."""
 # Standard library
+import os
 from dataclasses import dataclass
 from typing import List
 from typing import Optional
-from typing import Tuple
 from typing import Union
 
 # Third-party
-import mlflow  # type: ignore  # type: ignore  # type: ignore
+import mlflow
 import torch
 from torch import nn
 from torch import optim
 from torch.optim import Adam
 from torch.optim.lr_scheduler import CyclicLR
-from torch_geometric.data import Data  # type: ignore  # type: ignore
-from torch_geometric.loader import DataLoader  # type: ignore
+from torch_geometric.loader import DataLoader
 from torch_geometric.nn import GCNConv  # type: ignore
-from torch_geometric.nn import TopKPooling
 
 # First-party
 from weathergraphnet.loggers_configs import setup_logger
+from weathergraphnet.utils import GraphDataset
 
 logger = setup_logger()
 
@@ -41,8 +40,7 @@ class TrainingConfigGNN(dict):  # pylint: disable=too-many-instance-attributes
 
     """
 
-    loader_train_in: DataLoader
-    loader_train_out: DataLoader
+    dataloader: GraphDataset
     optimizer: Union[optim.Optimizer, torch.optim.Optimizer, Adam]
     scheduler: Union[CyclicLR, torch.optim.lr_scheduler.CyclicLR]
     loss_fn: Union[
@@ -52,6 +50,7 @@ class TrainingConfigGNN(dict):  # pylint: disable=too-many-instance-attributes
     mask: Optional[torch.Tensor] = None
     epochs: int = 10
     device: str = "cuda"
+    batch_size: int = 21
     seed: int = 42
 
 
@@ -69,14 +68,14 @@ class EvaluationConfigGNN(dict):
 
     """
 
-    loader_in: DataLoader
-    loader_out: DataLoader
+    dataloader: GraphDataset
     loss_fn: Union[
         nn.Module,
         nn.MSELoss,
     ]
     mask: Optional[torch.Tensor] = None
     device: str = "cuda"
+    batch_size: int = 21
     seed: int = 42
 
 
@@ -259,52 +258,11 @@ class GCNConvLayers(torch.nn.Module):
         return x
 
 
-class TopKPoolingLayer(torch.nn.Module):
-    """A Graph Neural Network (GNN) model for weather prediction.
-
-    Args:
-        config (GNNConfig): Configuration parameters for the GNN model.
-
-    Methods:
-        forward(data): Performs a forward pass through the GNN model.
-
-    """
-
-    def __init__(self, gnn_configs: GNNConfig):
-        """Initialize the GNN model.
-
-        Args:
-            gnn_configs (GNNConfig): The configuration parameters for the GNN model.
-
-        """
-        super().__init__()
-        try:
-            self.pool = TopKPooling(
-                gnn_configs.channels_out,
-                ratio=gnn_configs.nodes_out / gnn_configs.nodes_in,
-            )
-        except (TypeError, ValueError) as e:
-            logger.error("Error initializing TopKPoolingLayer: %s", e)
-
-    def forward(
-        self, x: torch.Tensor, edge_index: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Perform a forward pass through the GNN model.
-
-        Args:
-            x (torch.Tensor): The input tensor.
-            edge_index (torch.Tensor): The edge index tensor.
-
-        Returns:
-            torch.Tensor: The output tensor.
-
-        """
-        try:
-            x, edge_index, _, _, _, _ = self.pool(x, edge_index)
-        except RuntimeError as e:
-            logger.error("Error in TopKPoolingLayer forward method: %s", e)
-            raise
-        return x, edge_index
+def loss_func(output, target, target_mask):
+    output_target = output[target_mask]
+    target_target = target[target_mask]
+    loss = nn.L1Loss()
+    return loss(output_target, target_target)
 
 
 class GNNModel(torch.nn.Module):
@@ -329,10 +287,9 @@ class GNNModel(torch.nn.Module):
         """
         super().__init__()
         self.conv_layers = GCNConvLayers(gnn_configs)
-        self.pool_layer = TopKPoolingLayer(gnn_configs)
         self.activation = torch.nn.ReLU()
 
-    def forward(self, data: Data) -> torch.Tensor:
+    def forward(self, data) -> torch.Tensor:
         """Perform a forward pass through the GNN model.
 
         Args:
@@ -344,7 +301,6 @@ class GNNModel(torch.nn.Module):
         """
         x, edge_index = data.x, data.edge_index
         x = self.conv_layers(x, edge_index)
-        x, edge_index = self.pool_layer(x, edge_index)
         return x
 
     def train_with_configs(self, configs_train_gnn: TrainingConfigGNN) -> None:
@@ -358,6 +314,7 @@ class GNNModel(torch.nn.Module):
             None
 
         """
+        os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
         # os.environ["MASTER_ADDR"] = "localhost"
         # os.environ["MASTER_PORT"] = "12355"  # choose an available port
         # torch.cuda.set_device(rank)
@@ -371,6 +328,12 @@ class GNNModel(torch.nn.Module):
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(configs_train_gnn.seed)
 
+        data_train_loader = DataLoader(
+            configs_train_gnn.dataloader,
+            # batch_size=configs_train_gnn.batch_size,
+            # collate_fn=collate_fn,
+        )
+
         device = configs_train_gnn.device
         model = self.to(device)
         # model = nn.parallel.DistributedDataParallel(model)
@@ -381,44 +344,27 @@ class GNNModel(torch.nn.Module):
             # Train the GNN model
             for epoch in range(configs_train_gnn.epochs):
                 running_loss = 0.0
-                for data_in, data_out in zip(
-                    configs_train_gnn.loader_train_in,
-                    configs_train_gnn.loader_train_out
-                ):
-                    data_in = data_in.to(device)
-                    data_out = data_out.to(device)
+                for data in data_train_loader:
+                    data = data.to(device)
                     configs_train_gnn.optimizer.zero_grad()
-                    # pylint: disable=not-callable
-                    output = model(data_in)
+                    # Use the input data from the GraphDataset
+                    output = model(data)
                     if configs_train_gnn.mask is not None:
-                        try:
-                            configs_train_gnn.mask = configs_train_gnn.mask.to(
-                                configs_train_gnn.device)
-                            loss = configs_train_gnn.loss_fn(
-                                output,
-                                data_out.x,
-                                configs_train_gnn.mask,
-                            )
-                        except Exception as e:
-                            logger.error(
-                                "Error occurred while calculating masked loss: %s", e)
-                            raise e
+                        configs_train_gnn.mask = configs_train_gnn.mask.to(
+                            device)
+                        # Use the target data from the GraphDataset
+                        loss = configs_train_gnn.loss_fn(
+                            output, data.x, configs_train_gnn.mask)
                     else:
-                        try:
-                            loss = configs_train_gnn.loss_fn(
-                                output, data_out.x)
-                        except Exception as e:
-                            logger.error(
-                                "Error occurred while calculating loss: %s", e)
-                            raise e
+                        # Use the target data from the GraphDataset
+                        loss = loss_func(output, data.x, data.target_mask)
                     loss.backward()
                     configs_train_gnn.optimizer.step()
                     if configs_train_gnn.scheduler is not None:
                         configs_train_gnn.scheduler.step()  # update the learning rate
                     running_loss += loss.item()
 
-                avg_loss = running_loss / \
-                    float(len(configs_train_gnn.loader_train_in))
+                avg_loss = running_loss / len(data_train_loader)
                 # gathered_losses = [torch.zeros_like(avg_loss) for _ in range(
                 #     dist.get_world_size())] if dist.get_rank() == 0 else []
                 # dist.gather(
@@ -452,23 +398,27 @@ class GNNModel(torch.nn.Module):
             float: The loss achieved during evaluation.
 
         """
+        data_eval_loader = DataLoader(
+            configs_eval_gnn.dataloader,
+        )
+
+        device = configs_eval_gnn.device
+        model = self.to(device)
         self.eval()
         with torch.no_grad():
             loss: float = 0.0
+            running_loss = 0.0
             y_preds: List[torch.Tensor] = []
-            for data_in, data_out in zip(
-                configs_eval_gnn.loader_in, configs_eval_gnn.loader_out
-            ):
-                data_in = data_in.to(configs_eval_gnn.device)
-                data_out = data_out.to(configs_eval_gnn.device)
+            for data in data_eval_loader:
+                data = data.to(configs_eval_gnn.device)
                 # pylint: disable=not-callable
-                output = self(data_in)
+                output = model(data)
                 if configs_eval_gnn.mask is not None:
                     try:
                         configs_eval_gnn.mask = configs_eval_gnn.mask.to(
                             configs_eval_gnn.device)
                         loss += configs_eval_gnn.loss_fn(
-                            output, data_out.x, configs_eval_gnn.mask
+                            output, data.x, configs_eval_gnn.mask
                         )
                     except Exception as e:
                         logger.error(
@@ -476,12 +426,14 @@ class GNNModel(torch.nn.Module):
                         raise e
                 else:
                     try:
-                        loss += configs_eval_gnn.loss_fn(output, data_out.x)
+                        loss = loss_func(
+                            output, data.x, data.target_mask)
                     except Exception as e:
                         logger.error(
                             "Error occurred while calculating loss: %s", e)
                         raise e
                 y_preds.append(output.cpu())
-            loss /= float(len(configs_eval_gnn.loader_in))
+                running_loss += loss.item()
+            avg_loss = running_loss / len(data_eval_loader)
 
-            return loss, y_preds
+            return avg_loss, y_preds
