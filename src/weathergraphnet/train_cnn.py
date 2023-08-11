@@ -40,8 +40,8 @@ def main():
         config, data_train, data_test = load_config_and_data()
         logger.info(f"Shape of training data{data_train.shape}")
         logger.info(f"Shape of training data{data_test.shape}")
-        # Create the dataset and dataloader
-        dataset = ConvDataset(data_train, config["member_split"])
+        # Create the dataset_train and dataloader
+        dataset_train = ConvDataset(data_train, config["member_split"])
         dataset_test = ConvDataset(data_test, config["member_split"])
 
         # loss_fn: Union[
@@ -92,7 +92,7 @@ def main():
             # Train the model Create a TrainingConfig object that contains both the
             # local variables and the JSON parameters
             config_train = TrainingConfigCNN(
-                dataset=dataset,
+                dataset=dataset_train,
                 optimizer=optimizer,
                 scheduler=scheduler,
                 loss_fn=loss_fn,
