@@ -20,6 +20,7 @@ dependencies:
   - dask-ml
   - flake8-black>=0.3
   - flake8>=6.0
+  - gcc>=5.5
   - ipdb>=0.13
   - ipython>=8.7
   - isort>=5.12
@@ -71,3 +72,7 @@ dependencies:
     - restructuredtext_lint
     - sphinx-mdinclude>=0.5
     - torch_geometric
+    - torch_scatter
+    - torch_cluster
+    - torch_spline_conv
+    - torch-sparse

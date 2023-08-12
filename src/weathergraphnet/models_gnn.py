@@ -9,16 +9,19 @@ from typing import Union
 # Third-party
 import mlflow
 import torch
+from torch import distributed as dist
 from torch import nn
 from torch import optim
 from torch.optim import Adam
 from torch.optim.lr_scheduler import CyclicLR
 from torch_geometric.loader import DataLoader
+from torch_geometric.loader import NeighborSampler  # type: ignore
 from torch_geometric.nn import GCNConv  # type: ignore
 
-# First-party
 from weathergraphnet.loggers_configs import setup_logger
 from weathergraphnet.utils import GraphDataset
+
+# First-party
 
 logger = setup_logger()
 
@@ -40,17 +43,17 @@ class TrainingConfigGNN(dict):  # pylint: disable=too-many-instance-attributes
 
     """
 
-    dataloader: GraphDataset
+    dataset: GraphDataset
     optimizer: Union[optim.Optimizer, torch.optim.Optimizer, Adam]
     scheduler: Union[CyclicLR, torch.optim.lr_scheduler.CyclicLR]
     loss_fn: Union[
         nn.Module,
         nn.MSELoss,
     ]
+    batch_size: int = 21
     mask: Optional[torch.Tensor] = None
     epochs: int = 10
     device: str = "cuda"
-    batch_size: int = 21
     seed: int = 42
 
 
@@ -303,7 +306,7 @@ class GNNModel(torch.nn.Module):
         x = self.conv_layers(x, edge_index)
         return x
 
-    def train_with_configs(self, configs_train_gnn: TrainingConfigGNN) -> None:
+    def train_with_configs(self, rank, configs_train_gnn: TrainingConfigGNN, world_size) -> None:
         """Train a GNN model and output data using the specified loss function.
 
         Args:
@@ -314,25 +317,25 @@ class GNNModel(torch.nn.Module):
             None
 
         """
-        os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
-        # os.environ["MASTER_ADDR"] = "localhost"
-        # os.environ["MASTER_PORT"] = "12355"  # choose an available port
-        # torch.cuda.set_device(rank)
-        # dist.init_process_group(
-        #     "nccl", rank=rank, world_size=world_size)
-        # if dist.get_rank() == 0:
-        print("Training UNet network with configurations:", flush=True)
-        print(configs_train_gnn, flush=True)
+        os.environ["CUDA_LAUNCH_BLOCKING"] = "1"  # TODO: remove this after debugging
+        os.environ["MASTER_ADDR"] = "localhost"
+        os.environ["MASTER_PORT"] = "12355"  # choose an available port
+        torch.cuda.set_device(rank)
+        dist.init_process_group(
+            "nccl", rank=rank, world_size=world_size)
+        if dist.get_rank() == 0:
+            print("Training UNet network with configurations:", flush=True)
+            print(configs_train_gnn, flush=True)
         # Set the seed for reproducibility
         torch.manual_seed(configs_train_gnn.seed)
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(configs_train_gnn.seed)
 
+        sampler = NeighborSampler(
+            configs_train_gnn.dataset.edge_index, sizes=[-1]*2,
+            batch_size=configs_train_gnn.batch_size, shuffle=True)
         data_train_loader = DataLoader(
-            configs_train_gnn.dataloader,
-            # batch_size=configs_train_gnn.batch_size,
-            # collate_fn=collate_fn,
-        )
+            configs_train_gnn.dataset, batch_sampler=sampler)
 
         device = configs_train_gnn.device
         model = self.to(device)
@@ -341,44 +344,50 @@ class GNNModel(torch.nn.Module):
             configs_train_gnn.mask = configs_train_gnn.mask.to(device)
 
         try:
+
+            # Train the GNN model
             # Train the GNN model
             for epoch in range(configs_train_gnn.epochs):
                 running_loss = 0.0
-                for data in data_train_loader:
-                    data = data.to(device)
+                for batch_size, n_id, adjs in data_train_loader:
+                    # Get the data for the nodes in the subgraph
+                    subgraph_data = configs_train_gnn.dataset[n_id].to(
+                        device)
+
+                    # Crop the target_mask to match the size of the subgraph
+                    subgraph_target_mask = configs_train_gnn.dataset.target_mask[n_id].to(
+                        device)
+
                     configs_train_gnn.optimizer.zero_grad()
-                    # Use the input data from the GraphDataset
-                    output = model(data)
-                    if configs_train_gnn.mask is not None:
-                        configs_train_gnn.mask = configs_train_gnn.mask.to(
-                            device)
-                        # Use the target data from the GraphDataset
-                        loss = configs_train_gnn.loss_fn(
-                            output, data.x, configs_train_gnn.mask)
-                    else:
-                        # Use the target data from the GraphDataset
-                        loss = loss_func(output, data.x, data.target_mask)
+
+                    # Use the input data from the subgraph
+                    output = model(subgraph_data)
+
+                    # Use the target data from the subgraph and the cropped mask
+                    loss = loss_func(output, subgraph_data.x,
+                                     subgraph_target_mask)
+
                     loss.backward()
                     configs_train_gnn.optimizer.step()
                     if configs_train_gnn.scheduler is not None:
                         configs_train_gnn.scheduler.step()  # update the learning rate
                     running_loss += loss.item()
 
-                avg_loss = running_loss / len(data_train_loader)
-                # gathered_losses = [torch.zeros_like(avg_loss) for _ in range(
-                #     dist.get_world_size())] if dist.get_rank() == 0 else []
-                # dist.gather(
-                #     avg_loss, gather_list=gathered_losses, dst=0)
+            avg_loss = running_loss / len(data_train_loader)
+            # gathered_losses = [torch.zeros_like(avg_loss) for _ in range(
+            #     dist.get_world_size())] if dist.get_rank() == 0 else []
+            # dist.gather(
+            #     avg_loss, gather_list=gathered_losses, dst=0)
 
-                # if dist.get_rank() == 0:
-                # avg_loss = torch.stack(gathered_losses).mean().item()
-                logger.info("Epoch: %d, Loss: %f4", epoch, avg_loss)
-                mlflow.log_metric("loss", avg_loss)
-                mlflow.pytorch.log_model(model, f"model_epoch_{epoch}")
-                best_loss = torch.tensor(float("inf")).to(device)
-                if avg_loss < best_loss:
-                    best_loss = avg_loss
-                    mlflow.pytorch.log_model(model, "models")
+            # if dist.get_rank() == 0:
+            # avg_loss = torch.stack(gathered_losses).mean().item()
+            logger.info("Epoch: %d, Loss: %f4", epoch, avg_loss)
+            mlflow.log_metric("loss", avg_loss)
+            mlflow.pytorch.log_model(model, f"model_epoch_{epoch}")
+            best_loss = torch.tensor(float("inf")).to(device)
+            if avg_loss < best_loss:
+                best_loss = avg_loss
+                mlflow.pytorch.log_model(model, "models")
 
         except RuntimeError as e:
             logger.error(
