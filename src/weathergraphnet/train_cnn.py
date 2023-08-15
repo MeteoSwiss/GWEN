@@ -13,6 +13,7 @@ from torch import optim
 
 # First-party
 from weathergraphnet.loggers_configs import setup_logger
+from weathergraphnet.loggers_configs import setup_mlflow
 from weathergraphnet.loss_functions import MaskedLoss
 from weathergraphnet.models_cnn import EvaluationConfigCNN
 from weathergraphnet.models_cnn import TrainingConfigCNN
@@ -21,7 +22,6 @@ from weathergraphnet.utils import ConvDataset
 from weathergraphnet.utils import create_animation
 from weathergraphnet.utils import load_best_model
 from weathergraphnet.utils import load_config_and_data
-from weathergraphnet.utils import setup_mlflow
 
 logger = setup_logger()
 

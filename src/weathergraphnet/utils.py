@@ -12,20 +12,16 @@ Functions:
     load_config_and_data: Load the configuration and data.
     load_data: Load the data.
     setup_mlflow: Setup MLflow.
-    suppress_warnings: Suppress all warnings.
 
 """
 # Standard library
 import os
-import socket
-import warnings
 from typing import Any
 from typing import List
 from typing import Tuple
 
 # Third-party
 import dask
-import matplotlib
 import matplotlib.pyplot as plt
 import mlflow  # type: ignore
 import numpy as np
@@ -166,6 +162,7 @@ class ConvDataset(Dataset):
 
 class GraphDataset(Dataset_GNN):
     def __init__(self, xr_data, split, transform=None, pre_transform=None):
+        super().__init__(root=None, transform=transform, pre_transform=pre_transform)
         self.data = xr_data
         self.split = split
         self._indices = None
@@ -175,6 +172,7 @@ class GraphDataset(Dataset_GNN):
         # Calculate nodes and edges
         self.nodes = self.data.sizes["member"]
         self.edge_index = erdos_renyi_graph(self.nodes, edge_prob=1)
+        # self.edge_index = torch.tensor(self.edge_index, dtype=torch.long)
 
         num_members = self.data.sizes["member"]
         member_indices = np.arange(num_members)
@@ -190,8 +188,7 @@ class GraphDataset(Dataset_GNN):
     def len(self):
         return len(self.data.time)
 
-
-    def get(self, idx):
+    def get(self, idx) -> Data:
         # Load only the necessary data
         x = self.data.isel(member=np.arange(self.nodes), time=idx).stack(
             features=["height", "ncells"]).load()
@@ -460,8 +457,6 @@ def load_config_and_data() -> Tuple[dict, xr.Dataset, xr.Dataset]:
     try:
         config = load_config()
 
-        # Suppress all warnings
-        suppress_warnings()
         data_train, data_test = load_data(config)
 
         if config["coarsen"] > 1:
@@ -524,48 +519,3 @@ def load_data(config: dict) -> Tuple[xr.Dataset, xr.Dataset]:
     except FileNotFoundError as e:
         logger.exception(str(e))
         raise e
-
-
-def setup_mlflow() -> Tuple[str, str]:
-    """Set up the MLflow experiment and artifact path based on the hostname.
-
-    Returns the artifact path and experiment name as a tuple.
-
-    """
-    try:
-        hostname = socket.gethostname()
-        # Set the artifact path based on the hostname
-        if "nid" in hostname:
-            artifact_path = (
-                "/scratch/e1000/meteoswiss/scratch/sadamov/"
-                "pyprojects_data/weathergraphnet/mlruns"
-            )
-            experiment_name = "WGN_balfrin"
-        else:
-            artifact_path = "/scratch/sadamov/pyprojects_data/weathergraphnet/mlruns"
-            experiment_name = "WGN"
-
-        mlflow.set_tracking_uri(str(here()) + "/mlruns")
-        existing_experiment = mlflow.get_experiment_by_name(experiment_name)
-        if existing_experiment is None:
-            mlflow.create_experiment(
-                name=experiment_name, artifact_location=artifact_path
-            )
-        mlflow.set_experiment(experiment_name=experiment_name)
-    except Exception as e:
-        logger.exception(str(e))
-        raise e
-    logger.info("MLflow experiment name: %s", experiment_name)
-    return artifact_path, experiment_name
-
-
-def suppress_warnings():
-    """Suppresses certain warnings that are not relevant to the user."""
-    warnings.simplefilter("always")
-    warnings.filterwarnings(
-        "ignore", category=matplotlib.MatplotlibDeprecationWarning)
-    warnings.filterwarnings("ignore", message="Setuptools is replacing dist")
-    warnings.filterwarnings(
-        "ignore",
-        message="Encountered an unexpected error while inferring pip requirements",
-    )

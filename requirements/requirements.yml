@@ -21,6 +21,7 @@ dependencies:
   - flake8-black>=0.3
   - flake8>=6.0
   - gcc>=5.5
+  - gxx>=5.5
   - ipdb>=0.13
   - ipython>=8.7
   - isort>=5.12

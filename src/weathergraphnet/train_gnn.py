@@ -40,7 +40,6 @@ Arguments:
 """
 
 # Standard library
-from typing import List
 
 # Third-party
 import mlflow  # type: ignore
@@ -55,6 +54,8 @@ from torch import optim
 
 # First-party
 from weathergraphnet.loggers_configs import setup_logger
+from weathergraphnet.loggers_configs import setup_mlflow
+from weathergraphnet.loggers_configs import suppress_warnings
 from weathergraphnet.loss_functions import MaskedLoss
 from weathergraphnet.models_gnn import EvaluationConfigGNN
 from weathergraphnet.models_gnn import GNNConfig
@@ -64,9 +65,9 @@ from weathergraphnet.utils import GraphDataset
 from weathergraphnet.utils import create_animation
 from weathergraphnet.utils import load_best_model
 from weathergraphnet.utils import load_config_and_data
-from weathergraphnet.utils import setup_mlflow
 
 logger = setup_logger()
+suppress_warnings()
 
 # TODO: add dropout layers to all my models!
 
@@ -85,7 +86,7 @@ def main():
 
     dataset_train = GraphDataset(data_train, config["member_split"])
     print("Data Type: ", type(dataset_train))
-    dataset_tets = GraphDataset(data_test, config["member_split"])
+    dataset_test = GraphDataset(data_test, config["member_split"])
 
     try:
         # loss_fn: nn.CrossEntropyLoss = nn.CrossEntropyLoss()
@@ -167,17 +168,35 @@ def main():
         logger.exception("Error occurred while setting up MLflow: %s", e)
 
     try:
-        y_pred: List[torch.Tensor] = []  # pylint: disable=R0801
         config_eval = EvaluationConfigGNN(
-            dataloader=dataset_tets,
+            dataset=dataset_test,
             loss_fn=loss_fn,
             mask=mask,
             device=device,
             batch_size=config["batch_size"],
             seed=config["seed"],
         )
-        test_loss, y_pred = model.eval_with_configs(config_eval)
-        # test_loss = test_loss.mean().item()
+
+        # world_size = torch.cuda.device_count() #TODO: eval on >1 GPU
+        world_size = 1
+
+        mp.spawn(
+            model.eval_with_configs,
+            args=(
+                config_eval,
+                world_size,
+                queue,
+                event
+            ),
+            nprocs=world_size,
+            join=True,
+        )
+        print("mp spawn is done.")
+
+        test_loss, b = queue.get()
+        y_pred = b.clone()
+        del b
+
         logger.info("Best model test loss: %f", test_loss)
     except (RuntimeError, ValueError) as e:
         logger.exception("Error occurred while evaluating model: %s", e)
@@ -186,11 +205,11 @@ def main():
         # TODO: This might have changed check data_test_out dims
 
         for i in range(len(y_pred)):
-            y_pred[i] = y_pred[i][dataset_tets.target_indices]
+            y_pred[i] = y_pred[i][dataset_test.target_indices]
 
         y_pred_reshaped = xr.DataArray(
             torch.cat(y_pred).numpy().reshape(
-                data_test.isel(member=dataset_tets.target_indices).shape),
+                data_test.isel(member=dataset_test.target_indices).shape),
             dims=["time", "member", "height", "ncells"],
         )
         logger.info(
@@ -203,7 +222,7 @@ def main():
             "data_test": data_test,
         }
 
-        test_out_members = dataset_tets.target_indices
+        test_out_members = dataset_test.target_indices
 
         for member_pred, member_target in enumerate(test_out_members):
             create_animation(

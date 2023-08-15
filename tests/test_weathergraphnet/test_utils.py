@@ -6,6 +6,7 @@ import os
 # Third-party
 import pytest
 import xarray as xr
+from weathergraphnet.loggers_configs import setup_mlflow
 
 # First-party
 from weathergraphnet.models_cnn import UNet
@@ -13,7 +14,6 @@ from weathergraphnet.models_gnn import GNNModel
 from weathergraphnet.utils import load_best_model
 from weathergraphnet.utils import load_config_and_data
 from weathergraphnet.utils import load_data
-from weathergraphnet.utils import setup_mlflow
 
 
 @pytest.fixture(scope="module")

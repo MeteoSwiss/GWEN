@@ -21,8 +21,8 @@ from torch.utils.data.distributed import DistributedSampler
 
 # First-party
 from weathergraphnet.loggers_configs import setup_logger
+from weathergraphnet.loggers_configs import setup_mlflow
 from weathergraphnet.utils import ConvDataset
-from weathergraphnet.utils import setup_mlflow
 
 logger = setup_logger()
 
@@ -557,8 +557,9 @@ class UNet(BaseNet):
 
                     if avg_loss_gathered < best_loss:
                         best_loss = avg_loss_gathered
-                        mlflow.pytorch.log_model(model.module, "models", pip_requirements=[
-                            f"torch=={torch.__version__}"])
+                        mlflow.pytorch.log_model(model.module,
+                                                 "models", pip_requirements=[
+                                                     f"torch=={torch.__version__}"])
 
         except RuntimeError as e:
             logger.error(
@@ -588,7 +589,7 @@ class UNet(BaseNet):
         # dist.init_process_group(
         #     "nccl", rank=rank, world_size=world_size) #TODO: eval on >1 GPU
         if dist.get_rank() == 0:
-            print("Training UNet network with configurations:", flush=True)
+            print("Evaluating UNet network with configurations:", flush=True)
             print(configs_eval_cnn, flush=True)
         torch.manual_seed(configs_eval_cnn.seed)
         if torch.cuda.is_available():

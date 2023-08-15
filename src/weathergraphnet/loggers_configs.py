@@ -2,7 +2,13 @@
 # Standard library
 import json
 import logging
+import re
+import socket
+import warnings
+from typing import Tuple
 
+import matplotlib
+import mlflow
 from pyprojroot import here
 
 # Third-party
@@ -61,3 +67,54 @@ def load_config():
     ) as f:
         config = json.load(f)
     return config
+
+
+def setup_mlflow() -> Tuple[str, str]:
+    """Set up the MLflow experiment and artifact path based on the hostname.
+
+    Returns the artifact path and experiment name as a tuple.
+
+    """
+    try:
+        hostname = socket.gethostname()
+        # Set the artifact path based on the hostname
+        if "nid" in hostname:
+            artifact_path = (
+                "/scratch/e1000/meteoswiss/scratch/sadamov/"
+                "pyprojects_data/weathergraphnet/mlruns"
+            )
+            experiment_name = "WGN_balfrin"
+        else:
+            artifact_path = "/scratch/sadamov/pyprojects_data/weathergraphnet/mlruns"
+            experiment_name = "WGN"
+
+        mlflow.set_tracking_uri(str(here()) + "/mlruns")
+        existing_experiment = mlflow.get_experiment_by_name(experiment_name)
+        if existing_experiment is None:
+            mlflow.create_experiment(
+                name=experiment_name, artifact_location=artifact_path
+            )
+        mlflow.set_experiment(experiment_name=experiment_name)
+    except Exception as e:
+        logger.exception(str(e))
+        raise e
+    logger.info("MLflow experiment name: %s", experiment_name)
+    return artifact_path, experiment_name
+
+
+def suppress_warnings():
+    """Suppresses certain warnings that are not relevant to the user."""
+    warnings.simplefilter("always")
+    warnings.filterwarnings(
+        "ignore", category=matplotlib.MatplotlibDeprecationWarning)
+    warnings.filterwarnings("ignore", message="Setuptools is replacing dist")
+    warnings.filterwarnings(
+        "ignore",
+        message="Encountered an unexpected error while inferring pip requirements"
+    )
+    warnings.filterwarnings("ignore",
+                            message=re.escape("Using '") + ".*" + re.escape(
+                                "' without a 'pyg-lib' installation is deprecated and "
+                                "will be removed soon. Please install 'pyg-lib' for "
+                                "accelerated neighborhood sampling"),
+                            category=UserWarning)
