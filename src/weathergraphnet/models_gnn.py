@@ -392,7 +392,7 @@ class GNNModel(torch.nn.Module):
             logger.error(
                 "Error occurred while training GNN: %s", str(e))
 
-    def eval_with_configs(
+    def eval_gnn_with_configs(
         self,
         rank,
         configs_eval_gnn: EvaluationConfigGNN,
