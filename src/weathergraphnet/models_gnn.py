@@ -394,7 +394,7 @@ class GNNModel(torch.nn.Module):
 
     mlflow.end_run()
 
-    def eval_with_configs(
+    def eval_gnn_with_configs(
         self,
         rank,
         configs_eval_gnn: EvaluationConfigGNN,

@@ -457,7 +457,7 @@ class UNet(BaseNet):
                     out, (x.shape[3] - out.shape[3], 0, 0, 0), mode="replicate"
                 )  # pad the output tensor
             if dist.get_rank() == 0:
-                logger.info(f"Output UNet shape: {out.shape}")
+                logger.debug(f"Output UNet shape: {out.shape}")
 
         except RuntimeError as e:
             logger.error(
@@ -568,7 +568,7 @@ class UNet(BaseNet):
             mlflow.end_run()
             dist.destroy_process_group()
 
-    def eval_with_configs(
+    def eval_cnn_with_configs(
         self, rank, configs_eval_cnn, world_size: EvaluationConfigCNN, queue, event
     ):
         """Evaluate the model.

@@ -142,7 +142,7 @@ def main():
         world_size = 1
 
         mp.spawn(
-            model.eval_with_configs,
+            model.eval_cnn_with_configs,
             args=(
                 config_eval,
                 world_size,
