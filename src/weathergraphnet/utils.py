@@ -11,7 +11,6 @@ Functions:
     load_best_model: Load the best checkpoint of the model recent MLflow run.
     load_config_and_data: Load the configuration and data.
     load_data: Load the data.
-    setup_mlflow: Setup MLflow.
 
 """
 # Standard library
