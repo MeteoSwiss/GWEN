@@ -1,0 +1,116 @@
+2023-08-18 05:45:29,999 - weathergraphnet.loggers_configs - INFO - MLflow experiment name: WGN_balfrin
+2023-08-18 05:45:30,235 - weathergraphnet.loggers_configs - INFO - Using 4 GPUs for Training
+Training UNet network with configurations:
+TrainingConfigGNN(dataset=GraphDataset(169), optimizer=Adam (
+Parameter Group 0
+    amsgrad: False
+    betas: (0.9, 0.999)
+    capturable: False
+    differentiable: False
+    eps: 1e-08
+    foreach: None
+    fused: None
+    lr: 0.0001
+    maximize: False
+    weight_decay: 0
+), scheduler=None, loss_fn=L1Loss(), batch_size=1, mask=None, epochs=5, device=device(type='cuda'), seed=23)
+2023-08-18 05:45:37,605 - weathergraphnet.loggers_configs - INFO - MLflow experiment name: WGN_balfrin
+Epoch: 0
+Epoch: 0
+Epoch: 0
+Epoch: 0
+Epoch: 1
+Epoch: 1
+Epoch: 1
+Epoch: 1
+Epoch: 2
+Epoch: 2
+Epoch: 2
+Epoch: 2
+Epoch: 3
+Epoch: 3
+Epoch: 3
+Epoch: 3
+Epoch: 4
+Epoch: 4
+Epoch: 4
+Epoch: 4
+Epoch: 4, Loss: 0.5410364866256714
+Epoch: 4, Loss: 0.568695604801178
+Epoch: 4, Loss: 0.5697287917137146
+Epoch: 4, Loss: 0.5681451559066772
+2023-08-18 10:15:08,847 - weathergraphnet.loggers_configs - INFO - Epoch: 4, Loss: 0.5686964
+/scratch/e1000/meteoswiss/scratch/sadamov/mambaforge/envs/weathergraphnet_alps/lib/python3.11/tempfile.py:895: ResourceWarning: Implicitly cleaning up <TemporaryDirectory '/tmp/tmpjazky7x_'>
+  _warnings.warn(warn_message, ResourceWarning)
+/scratch/e1000/meteoswiss/scratch/sadamov/mambaforge/envs/weathergraphnet_alps/lib/python3.11/tempfile.py:895: ResourceWarning: Implicitly cleaning up <TemporaryDirectory '/tmp/tmpy23gcv_0'>
+  _warnings.warn(warn_message, ResourceWarning)
+/scratch/e1000/meteoswiss/scratch/sadamov/mambaforge/envs/weathergraphnet_alps/lib/python3.11/tempfile.py:895: ResourceWarning: Implicitly cleaning up <TemporaryDirectory '/tmp/tmpo2bbk2l8'>
+  _warnings.warn(warn_message, ResourceWarning)
+2023/08/18 10:16:50 WARNING mlflow.utils.requirements_utils: The following packages were not found in the public PyPI package index as of 2023-07-14; if these packages are not present in the public PyPI index, you must install them manually before loading your model: {'weathergraphnet'}
+/scratch/e1000/meteoswiss/scratch/sadamov/mambaforge/envs/weathergraphnet_alps/lib/python3.11/tempfile.py:895: ResourceWarning: Implicitly cleaning up <TemporaryDirectory '/tmp/tmpj3oq6qjy'>
+  _warnings.warn(warn_message, ResourceWarning)
+Evaluating UNet network with configurations:
+EvaluationConfigGNN(dataset=GraphDataset(72), loss_fn=L1Loss(), mask=None, device=device(type='cuda'), batch_size=1, seed=23)
+2023-08-18 10:20:03,555 - weathergraphnet.loggers_configs - ERROR - Error occurred while performing forward pass in UpConvLayers: CUDA out of memory. Tried to allocate 4.90 GiB (GPU 0; 95.07 GiB total capacity; 84.12 GiB already allocated; 4.68 GiB free; 89.11 GiB reserved in total by PyTorch) If reserved memory is >> allocated memory try setting max_split_size_mb to avoid fragmentation.  See documentation for Memory Management and PYTORCH_CUDA_ALLOC_CONF
+/scratch/e1000/meteoswiss/scratch/sadamov/mambaforge/envs/weathergraphnet_alps/lib/python3.11/tempfile.py:895: ResourceWarning: Implicitly cleaning up <TemporaryDirectory '/tmp/tmpq94ohckg'>
+  _warnings.warn(warn_message, ResourceWarning)
+Traceback (most recent call last):
+  File "/users/sadamov/pyprojects/weathergraphnet/src/weathergraphnet/train_gnn.py", line 237, in <module>
+    main()
+  File "/users/sadamov/pyprojects/weathergraphnet/src/weathergraphnet/train_gnn.py", line 181, in main
+    mp.spawn(
+  File "/scratch/e1000/meteoswiss/scratch/sadamov/mambaforge/envs/weathergraphnet_alps/lib/python3.11/site-packages/torch/multiprocessing/spawn.py", line 239, in spawn
+    return start_processes(fn, args, nprocs, join, daemon, start_method='spawn')
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/e1000/meteoswiss/scratch/sadamov/mambaforge/envs/weathergraphnet_alps/lib/python3.11/site-packages/torch/multiprocessing/spawn.py", line 197, in start_processes
+    while not context.join():
+              ^^^^^^^^^^^^^^
+  File "/scratch/e1000/meteoswiss/scratch/sadamov/mambaforge/envs/weathergraphnet_alps/lib/python3.11/site-packages/torch/multiprocessing/spawn.py", line 160, in join
+    raise ProcessRaisedException(msg, error_index, failed_process.pid)
+torch.multiprocessing.spawn.ProcessRaisedException: 
+
+-- Process 0 terminated with the following error:
+Traceback (most recent call last):
+  File "/scratch/e1000/meteoswiss/scratch/sadamov/mambaforge/envs/weathergraphnet_alps/lib/python3.11/site-packages/torch/multiprocessing/spawn.py", line 69, in _wrap
+    fn(i, *args)
+  File "/users/sadamov/pyprojects/weathergraphnet/src/weathergraphnet/models_gnn.py", line 453, in eval_gnn_with_configs
+    output = model(node_features, edge_index)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/e1000/meteoswiss/scratch/sadamov/mambaforge/envs/weathergraphnet_alps/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1501, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/users/sadamov/pyprojects/weathergraphnet/src/weathergraphnet/models_gnn.py", line 307, in forward
+    x = self.conv_layers(x, edge_index)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/e1000/meteoswiss/scratch/sadamov/mambaforge/envs/weathergraphnet_alps/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1501, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/users/sadamov/pyprojects/weathergraphnet/src/weathergraphnet/models_gnn.py", line 259, in forward
+    x = self.up_conv_layers(x, edge_index)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/e1000/meteoswiss/scratch/sadamov/mambaforge/envs/weathergraphnet_alps/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1501, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/users/sadamov/pyprojects/weathergraphnet/src/weathergraphnet/models_gnn.py", line 211, in forward
+    x = self.upconv5(x, edge_index)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/e1000/meteoswiss/scratch/sadamov/mambaforge/envs/weathergraphnet_alps/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1501, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/e1000/meteoswiss/scratch/sadamov/mambaforge/envs/weathergraphnet_alps/lib/python3.11/site-packages/torch_geometric/nn/conv/gcn_conv.py", line 232, in forward
+    out = self.propagate(edge_index, x=x, edge_weight=edge_weight,
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/e1000/meteoswiss/scratch/sadamov/mambaforge/envs/weathergraphnet_alps/lib/python3.11/site-packages/torch_geometric/nn/conv/message_passing.py", line 467, in propagate
+    out = self.message(**msg_kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/e1000/meteoswiss/scratch/sadamov/mambaforge/envs/weathergraphnet_alps/lib/python3.11/site-packages/torch_geometric/nn/conv/gcn_conv.py", line 241, in message
+    return x_j if edge_weight is None else edge_weight.view(-1, 1) * x_j
+                                           ~~~~~~~~~~~~~~~~~~~~~~~~^~~~~
+torch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 4.90 GiB (GPU 0; 95.07 GiB total capacity; 84.12 GiB already allocated; 4.68 GiB free; 89.11 GiB reserved in total by PyTorch) If reserved memory is >> allocated memory try setting max_split_size_mb to avoid fragmentation.  See documentation for Memory Management and PYTORCH_CUDA_ALLOC_CONF
+
+/scratch/e1000/meteoswiss/scratch/sadamov/mambaforge/envs/weathergraphnet_alps/lib/python3.11/tempfile.py:895: ResourceWarning: Implicitly cleaning up <TemporaryDirectory '/tmp/tmp4dtm4f_i'>
+  _warnings.warn(warn_message, ResourceWarning)
+/scratch/e1000/meteoswiss/scratch/sadamov/mambaforge/envs/weathergraphnet_alps/lib/python3.11/tempfile.py:895: ResourceWarning: Implicitly cleaning up <TemporaryDirectory '/tmp/tmp2is30wyw'>
+  _warnings.warn(warn_message, ResourceWarning)
+srun: error: nid002140: task 0: Exited with exit code 1
+srun: launch/slurm: _step_signal: Terminating StepId=817796.0

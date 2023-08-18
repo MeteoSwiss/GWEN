@@ -1,6 +1,5 @@
-# Third-party
 import torch
-from _typeshed import Incomplete
+from _typeshed import Incomplete as Incomplete
 
 parser: Incomplete
 args: Incomplete
@@ -19,11 +18,10 @@ class GCN(torch.nn.Module):
 model: Incomplete
 optimizer: Incomplete
 
-def train(): ...
-def test(): ...
+def train() -> None: ...
+def test() -> None: ...
 
 best_val_acc: int
-
 final_test_acc: int
 times: Incomplete
 start: Incomplete

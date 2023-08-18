@@ -1,21 +1,13 @@
-from typing import List
-from typing import Optional
-from typing import Tuple
-from typing import Union
-
 import torch
-from _typeshed import Incomplete
-from torch import nn as nn
-from torch import optim as optim
+from _typeshed import Incomplete as Incomplete
+from torch import nn as nn, optim as optim
 from torch.optim import Adam
 from torch.optim.lr_scheduler import CyclicLR
-from torch_geometric.data import Data as Data  # type: ignore
-from torch_geometric.loader import DataLoader as DataLoader  # type: ignore
-
-from weathergraphnet.loggers_configs import setup_logger as setup_logger
+from torch_geometric.data import Data as Data
+from torch_geometric.loader import DataLoader as DataLoader
+from typing import List, Optional, Tuple, Union
 
 logger: Incomplete
-
 
 class TrainingConfigGNN(dict):
     loader_train_in: DataLoader
@@ -27,9 +19,7 @@ class TrainingConfigGNN(dict):
     epochs: int
     device: str
     seed: int
-    def __init__(self, loader_train_in, loader_train_out, optimizer,
-                 scheduler, loss_fn, mask, epochs, device, seed) -> None: ...
-
+    def __init__(self, loader_train_in, loader_train_out, optimizer, scheduler, loss_fn, mask, epochs, device, seed) -> None: ...
 
 class EvaluationConfigGNN(dict):
     loader_in: DataLoader
@@ -38,9 +28,7 @@ class EvaluationConfigGNN(dict):
     mask: Optional[torch.Tensor]
     device: str
     seed: int
-    def __init__(self, loader_in, loader_out, loss_fn,
-                 mask, device, seed) -> None: ...
-
+    def __init__(self, loader_in, loader_out, loss_fn, mask, device, seed) -> None: ...
 
 class GNNConfig(dict):
     nodes_in: int
@@ -48,9 +36,7 @@ class GNNConfig(dict):
     channels_in: int
     channels_out: int
     hidden_feats: int
-    def __init__(self, nodes_in, nodes_out, channels_in,
-                 channels_out, hidden_feats) -> None: ...
-
+    def __init__(self, nodes_in, nodes_out, channels_in, channels_out, hidden_feats) -> None: ...
 
 class DownConvLayers(torch.nn.Module):
     conv1: Incomplete
@@ -59,9 +45,7 @@ class DownConvLayers(torch.nn.Module):
     conv4: Incomplete
     conv5: Incomplete
     def __init__(self, gnn_configs: GNNConfig) -> None: ...
-    def forward(self, x: torch.Tensor,
-                edge_index: torch.Tensor) -> torch.Tensor: ...
-
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor: ...
 
 class UpConvLayers(torch.nn.Module):
     upconv1: Incomplete
@@ -70,24 +54,18 @@ class UpConvLayers(torch.nn.Module):
     upconv4: Incomplete
     upconv5: Incomplete
     def __init__(self, gnn_configs: GNNConfig) -> None: ...
-    def forward(self, x: torch.Tensor,
-                edge_index: torch.Tensor) -> torch.Tensor: ...
-
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor: ...
 
 class GCNConvLayers(torch.nn.Module):
     down_conv_layers: Incomplete
     up_conv_layers: Incomplete
     def __init__(self, gnn_configs: GNNConfig) -> None: ...
-    def forward(self, x: torch.Tensor,
-                edge_index: torch.Tensor) -> torch.Tensor: ...
-
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor: ...
 
 class TopKPoolingLayer(torch.nn.Module):
     pool: Incomplete
     def __init__(self, gnn_configs: GNNConfig) -> None: ...
-    def forward(self, x: torch.Tensor,
-                edge_index: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]: ...
-
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]: ...
 
 class GNNModel(torch.nn.Module):
     conv_layers: Incomplete
@@ -95,9 +73,5 @@ class GNNModel(torch.nn.Module):
     activation: Incomplete
     def __init__(self, gnn_configs: GNNConfig) -> None: ...
     def forward(self, data: Data) -> torch.Tensor: ...
-
-    def train_with_configs(
-        self, configs_train_gnn: TrainingConfigGNN) -> None: ...
-
-    def eval_with_configs(
-        self, configs_eval_gnn: EvaluationConfigGNN) -> tuple[float, List[torch.Tensor]]: ...
+    def train_with_configs(self, configs_train_gnn: TrainingConfigGNN) -> None: ...
+    def eval_with_configs(self, configs_eval_gnn: EvaluationConfigGNN) -> tuple[float, List[torch.Tensor]]: ...
