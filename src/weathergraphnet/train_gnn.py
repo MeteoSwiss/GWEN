@@ -43,6 +43,7 @@ Arguments:
 
 # Third-party
 import mlflow  # type: ignore
+import numpy as np
 import torch
 import torch.multiprocessing as mp
 
@@ -79,13 +80,10 @@ def main():
     queue = manager.Queue(10000)
     event = mp.Event()
 
-    print("Queue: ", queue, "Event: ", event)
-
     # Load the configuration parameters and the input and output data
     config, data_train, data_test = load_config_and_data()
 
     dataset_train = GraphDataset(data_train, config["member_split"])
-    print("Data Type: ", type(dataset_train))
     dataset_test = GraphDataset(data_test, config["member_split"])
 
     try:
@@ -177,8 +175,8 @@ def main():
             seed=config["seed"],
         )
 
-        # world_size = torch.cuda.device_count() #TODO: eval on >1 GPU
-        world_size = 1
+        world_size = torch.cuda.device_count()  # TODO: eval on >1 GPU
+        # world_size = 1
 
         mp.spawn(
             model.eval_gnn_with_configs,
@@ -203,18 +201,11 @@ def main():
     try:
         # Plot the predictions
         # TODO: This might have changed check data_test_out dims
+        y_pred_reshaped = xr.DataArray(y_pred.numpy().reshape(
+            np.array(data_test.values).shape), dims=["time", "member", "height", "ncells"])
 
-        for i in range(len(y_pred)):
-            y_pred[i] = y_pred[i][dataset_test.target_indices]
-
-        y_pred_reshaped = xr.DataArray(
-            torch.cat(y_pred).numpy().reshape(
-                data_test.isel(member=dataset_test.target_indices).shape),
-            dims=["time", "member", "height", "ncells"],
-        )
         logger.info(
-            "The shape of the raw model prediction: %s", torch.cat(
-                y_pred).numpy().shape
+            "The shape of the raw model prediction: %s", y_pred.numpy().shape
         )
         logger.info("Reshaped into form: %s", y_pred_reshaped.shape)
         data_gif = {

@@ -4,7 +4,7 @@
     "data_path": "/scratch/sadamov/icon/icon-nwp/cpu/experiments/",
     "data_test": "/data/data_test_coarse8.zarr",
     "data_train": "/data/data_train_coarse8.zarr",
-    "epochs": 1,
+    "epochs": 5,
     "filename_regex": "atmcirc-straka_93_(.*)DOM01_ML_20080801T000000Z.nc",
     "hidden_feats": 1024,
     "lr": 0.00001,

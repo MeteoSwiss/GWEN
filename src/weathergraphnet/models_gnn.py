@@ -334,6 +334,7 @@ class GNNModel(torch.nn.Module):
             torch.cuda.manual_seed_all(configs_train_gnn.seed)
         suppress_warnings()
         if dist.get_rank() == 0:
+            logger = setup_logger()
             # Train the model with MLflow logging
             artifact_path, experiment_name = setup_mlflow()
             MLFlowLogger(experiment_name=experiment_name)
@@ -348,6 +349,7 @@ class GNNModel(torch.nn.Module):
         try:
             # Train the GNN model
             for epoch in range(configs_train_gnn.epochs):
+                print(f"Epoch: {epoch}", flush=True)
                 running_loss = 0.0
                 for data in configs_train_gnn.dataset:
                     data_loader = NeighborLoader(
@@ -374,25 +376,26 @@ class GNNModel(torch.nn.Module):
                         configs_train_gnn.optimizer.step()
                         if configs_train_gnn.scheduler is not None:
                             configs_train_gnn.scheduler.step()
-                        running_loss += loss.item()
+                        running_loss += loss
 
                 avg_loss = running_loss / len(configs_train_gnn.dataset)
-
+            print(f"Epoch: {epoch}, Loss: {avg_loss}", flush=True)
             torch.distributed.barrier()  # Wait for all workers to finish
             if dist.get_rank() == 0:
-                logger.info("Epoch: %d,     Loss: %f4", epoch, avg_loss)
+                logger.info("Epoch: %d, Loss: %f4", epoch, avg_loss)
                 mlflow.log_metric("loss", avg_loss)
-                mlflow.pytorch.log_model(model, f"model_epoch_{epoch}")
                 best_loss = torch.tensor(float("inf")).to(device)
                 if avg_loss < best_loss:
                     best_loss = avg_loss
-                    mlflow.pytorch.log_model(model, "models")
+                    mlflow.pytorch.log_model(model.to("cpu"), "models")
 
         except RuntimeError as e:
             logger.error(
                 "Error occurred while training GNN: %s", str(e))
 
-    mlflow.end_run()
+        if dist.get_rank() == 0:
+            mlflow.end_run()
+            dist.destroy_process_group()
 
     def eval_gnn_with_configs(
         self,
@@ -412,7 +415,6 @@ class GNNModel(torch.nn.Module):
             float: The loss achieved during evaluation.
 
         """
-        print("HEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEERE")
         os.environ["MASTER_ADDR"] = "localhost"
         os.environ["MASTER_PORT"] = "12355"  # choose an available port
         os.environ["TORCH_DISTRIBUTED_DEBUG"] = "INFO"
@@ -422,6 +424,7 @@ class GNNModel(torch.nn.Module):
         # dist.init_process_group(
         #     "nccl", rank=rank, world_size=world_size) #TODO: eval on >1 GPU
         if dist.get_rank() == 0:
+            logger = setup_logger()
             print("Evaluating UNet network with configurations:", flush=True)
             print(configs_eval_gnn, flush=True)
         torch.manual_seed(configs_eval_gnn.seed)
@@ -450,11 +453,11 @@ class GNNModel(torch.nn.Module):
                     output = model(node_features, edge_index)
                     loss = loss_func(output, node_features, target_mask)
                     ranks.append(rank)
-                    y_preds.append(output)
-                    running_loss += loss.item()
+                    y_preds.append(output[1])
+                    running_loss += loss
 
-            avg_loss = torch.tensor(running_loss.item() /
-                                    float(len(configs_eval_gnn.dataset))).to(device)
+            avg_loss = running_loss / float(len(configs_eval_gnn.dataset))
+            avg_loss = avg_loss.to(device)
             gathered_losses = [torch.zeros_like(avg_loss) for _ in range(
                 dist.get_world_size())] if dist.get_rank() == 0 else []
 
@@ -470,13 +473,14 @@ class GNNModel(torch.nn.Module):
             dist.all_gather(y_preds_list, y_preds_tensor)
             dist.gather(avg_loss, gather_list=gathered_losses, dst=0)
 
+            print(ranks_list, flush=True)
             y_preds_ordered = [y_pred for _, y_pred in sorted(
                 zip(ranks_list, y_preds_list), key=lambda x: x[0])]
 
             dist.barrier()
             if dist.get_rank() == 0:
                 avg_loss_gathered = torch.stack(
-                    gathered_losses).mean().item()
+                    gathered_losses).mean()
                 y_preds_ordered_tensor = torch.cat(y_preds_ordered)
                 logger.info("Loss: %f", avg_loss_gathered)
             dist.barrier()
