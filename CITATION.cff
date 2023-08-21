@@ -1,0 +1,15 @@
+cff-version: 1.2.0
+message: If you use this code, please cite the following paper: BLANK
+authors:
+  - family-names: Adamov
+    given-names: Simon
+    orcid: https://orcid.org/0000-0003-3599-6816
+title: GWEN - A Graph-based Weather Ensemble Network
+programming-languages:
+  - "Python"
+dependencies:
+  - "torch"
+  - "torch_geometric"
+version: 0.0.1-alpha
+date-released: 2024-01-01
+repository-code: https://github.com/MeteoSwiss/GWEN
