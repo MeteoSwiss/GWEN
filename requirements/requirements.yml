@@ -29,7 +29,7 @@ dependencies:
   - mamba>=1.1
   - matplotlib>=3.7.1
   - mccabe>=0.7
-  - mlflow
+  - mlflow=2.5 #BUG: mlflow is working on a patch for >2.5 and pydantic V2
   - mypy>=0.991
   - notebook
   - pre-commit>=2.20
@@ -71,6 +71,7 @@ dependencies:
     - nvidia-nccl-cu11
     - nvidia-nvtx-cu11
     - restructuredtext_lint
+    - rstcheck-core>=1.1.1
     - sphinx-mdinclude>=0.5
     - torch_geometric
     - torch_scatter

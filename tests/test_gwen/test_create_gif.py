@@ -20,7 +20,7 @@ from gwen.create_gif import create_update_function
 from gwen.create_gif import get_member_name
 from gwen.create_gif import main
 from gwen.create_gif import save_animation
-from gwen.loggers_configss_configs import load_config
+from gwen.loggers_configs import load_config
 
 config = load_config()
 

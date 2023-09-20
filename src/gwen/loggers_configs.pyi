@@ -1,9 +1,6 @@
-# Standard library
 import logging
-from typing import Tuple
-
-# Third-party
 from _typeshed import Incomplete
+from typing import Tuple
 
 logger: Incomplete
 

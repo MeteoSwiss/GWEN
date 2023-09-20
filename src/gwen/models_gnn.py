@@ -302,7 +302,7 @@ class GNNModel(torch.nn.Module):
         x = self.conv_layers(x, edge_index)
         return x
 
-    def train_with_configs(
+    def train_with_configs(  # pylint: disable=too-many-locals, too-many-statements
         self, rank, configs_train_gnn: TrainingConfigGNN, world_size
     ) -> None:
         """Train a GNN model and output data using the specified loss function.
@@ -315,7 +315,9 @@ class GNNModel(torch.nn.Module):
             None
 
         """
-        os.environ["CUDA_LAUNCH_BLOCKING"] = "1"  # TODO: remove this after debugging
+        suppress_warnings()
+        # TODO: remove this after debugging
+        os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
         os.environ["MASTER_ADDR"] = "localhost"
         os.environ["MASTER_PORT"] = "12355"  # choose an available port
         torch.cuda.set_device(rank)
@@ -327,11 +329,10 @@ class GNNModel(torch.nn.Module):
         torch.manual_seed(configs_train_gnn.seed)
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(configs_train_gnn.seed)
-        suppress_warnings()
         if dist.get_rank() == 0:
-            logger = setup_logger()
+            logger_train = setup_logger()
             # Train the model with MLflow logging
-            artifact_path, experiment_name = setup_mlflow()
+            _, experiment_name = setup_mlflow()
             MLFlowLogger(experiment_name=experiment_name)
             mlflow.start_run()
 
@@ -361,7 +362,9 @@ class GNNModel(torch.nn.Module):
                         configs_train_gnn.optimizer.zero_grad()
 
                         # Use the input data from the subgraph
-                        output = model(node_features, edge_index)
+                        output = model(  # pylint: disable=not-callable
+                            node_features, edge_index
+                        )
 
                         # Use the target data from the subgraph and the cropped mask
                         loss = loss_func(output, node_features, target_mask)
@@ -376,7 +379,7 @@ class GNNModel(torch.nn.Module):
             print(f"Epoch: {epoch}, Loss: {avg_loss}", flush=True)
             torch.distributed.barrier()  # Wait for all workers to finish
             if dist.get_rank() == 0:
-                logger.info("Epoch: %d, Loss: %f4", epoch, avg_loss)
+                logger_train.info("Epoch: %d, Loss: %f4", epoch, avg_loss)
                 mlflow.log_metric("loss", avg_loss)
                 best_loss = torch.tensor(float("inf")).to(device)
                 if avg_loss < best_loss:
@@ -384,14 +387,14 @@ class GNNModel(torch.nn.Module):
                     mlflow.pytorch.log_model(model.to("cpu"), "models")
 
         except RuntimeError as e:
-            logger.error("Error occurred while training GNN: %s", str(e))
+            logger_train.error("Error occurred while training GNN: %s", str(e))
 
         if dist.get_rank() == 0:
             mlflow.end_run()
             dist.destroy_process_group()
 
-    def eval_gnn_with_configs(
-        self, rank, configs_eval_gnn: EvaluationConfigGNN, world_size, queue, event
+    def eval_gnn_with_configs(  # pylint: disable=too-many-locals, too-many-statements
+        self, rank, configs_eval_gnn: EvaluationConfigGNN, world_size, queue
     ) -> tuple[float, List[torch.Tensor]]:
         """Evaluate the performance of the GNN model on a given dataset.
 
@@ -403,15 +406,16 @@ class GNNModel(torch.nn.Module):
             float: The loss achieved during evaluation.
 
         """
+        suppress_warnings()
         os.environ["MASTER_ADDR"] = "localhost"
         os.environ["MASTER_PORT"] = "12355"  # choose an available port
         os.environ["TORCH_DISTRIBUTED_DEBUG"] = "INFO"
         torch.cuda.set_device(rank)
-        dist.init_process_group("nccl", rank=rank, world_size=1)
+        dist.init_process_group("nccl", rank=rank, world_size=world_size)
         # dist.init_process_group(
         #     "nccl", rank=rank, world_size=world_size) #TODO: eval on >1 GPU
         if dist.get_rank() == 0:
-            logger = setup_logger()
+            logger_eval = setup_logger()
             print("Evaluating UNet network with configurations:", flush=True)
             print(configs_eval_gnn, flush=True)
         torch.manual_seed(configs_eval_gnn.seed)
@@ -437,7 +441,9 @@ class GNNModel(torch.nn.Module):
                     node_features = data_flow.x.to(device)
                     edge_index = data_flow.edge_index.to(device)
                     target_mask = data_flow.target_mask.to(device)
-                    output = model(node_features, edge_index)
+                    output = model(  # pylint: disable=not-callable
+                        node_features, edge_index
+                    )
                     loss = loss_func(output, node_features, target_mask)
                     ranks.append(rank)
                     y_preds.append(output[1])
@@ -477,7 +483,7 @@ class GNNModel(torch.nn.Module):
             if dist.get_rank() == 0:
                 avg_loss_gathered = torch.stack(gathered_losses).mean()
                 y_preds_ordered_tensor = torch.cat(y_preds_ordered)
-                logger.info("Loss: %f", avg_loss_gathered)
+                logger_eval.info("Loss: %f", avg_loss_gathered)
             dist.barrier()
             torch.cuda.synchronize()
             if dist.get_rank() == 0:

@@ -2,7 +2,7 @@
 import unittest
 
 # Third-party
-from _typeshed import Incomplete as Incomplete
+from _typeshed import Incomplete
 
 class TestGNNModel(unittest.TestCase):
     configs_train: Incomplete

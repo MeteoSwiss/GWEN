@@ -28,17 +28,16 @@ logger = setup_logger()
 # pylint: disable=R0902,R0801
 
 
-def main():
+def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-branches
     try:
         ctx = mp.get_context("spawn")
         manager = ctx.Manager()
         queue = manager.Queue(10000)
-        event = mp.Event()
 
         # Load the configuration parameters and the input and output data
         config, data_train, data_test = load_config_and_data()
-        logger.info(f"Shape of training data{data_train.shape}")
-        logger.info(f"Shape of training data{data_test.shape}")
+        logger.info("Shape of training data: %s", data_train.shape)
+        logger.info("Shape of test data: %s", data_test.shape)
         # Create the dataset_train and dataloader
         dataset_train = ConvDataset(data_train, config["member_split"])
         dataset_test = ConvDataset(data_test, config["member_split"])
@@ -61,7 +60,7 @@ def main():
             mask = None
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        logger.info(f"Using device: {device}")
+        logger.info("Using device: %s", device)
 
         if config["retrain"]:
             # This line is used to set multiprocessing start method
@@ -138,7 +137,7 @@ def main():
 
         mp.spawn(
             model.eval_cnn_with_configs,
-            args=(config_eval, world_size, queue, event),
+            args=(config_eval, world_size, queue),
             nprocs=world_size,
             join=True,
         )

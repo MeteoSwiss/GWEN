@@ -5,53 +5,15 @@ from unittest import mock
 
 # Third-party
 import torch
-from torch import Tensor
 
 # First-party
 from gwen.models_cnn import EvaluationConfigCNN
 from gwen.models_cnn import TrainingConfigCNN
 from gwen.models_cnn import UNet
-from gwen.models_gnn import EvaluationConfigGNN
-from gwen.models_gnn import GNNConfig
 from gwen.models_gnn import GNNModel
-from gwen.models_gnn import TrainingConfigGNN
 
 
 class TestGNNModel(unittest.TestCase):
-    def setUp(self):
-        configs_train = {
-            "loader_train_in": [torch.randn(10, 5) for _ in range(3)],
-            "loader_train_out": [torch.randn(10, 1) for _ in range(3)],
-            "optimizer": mock.MagicMock(),
-            "scheduler": None,
-            "loss_fn": torch.nn.MSELoss(),
-            "mask": Tensor | None,
-            "epochs": 10,
-            "device": "cpu",
-            "seed": 42,
-        }
-
-        configs_gnn = {
-            "nodes_in": 10,
-            "nodes_out": 10,
-            "channels_in": 10,
-            "channels_out": 10,
-            "hidden_feats": 10,
-        }
-
-        configs_test = {
-            "loader_in": [torch.randn(10, 5) for _ in range(3)],
-            "loader_out": [torch.randn(10, 1) for _ in range(3)],
-            "loss_fn": torch.nn.MSELoss(),
-            "mask": Tensor | None,
-            "device": "cpu",
-            "seed": 42,
-        }
-
-        self.configs_train = TrainingConfigGNN(**configs_train)
-        self.configs_test = EvaluationConfigGNN(**configs_test)
-        self.configs_gnn = GNNConfig(**configs_gnn)
-
     def test_train_with_configs(self):
         model = GNNModel(self.configs_gnn)
         model.conv_layers = mock.MagicMock()
@@ -62,7 +24,7 @@ class TestGNNModel(unittest.TestCase):
         )
         model.activation = torch.nn.ReLU()
 
-        model.train_with_configs(self.configs_train)
+        model.train_with_configs(0, self.configs_train, 1)
 
         self.assertEqual(model.conv_layers.call_count, 6)
         self.assertEqual(model.pool_layer.call_count, 6)

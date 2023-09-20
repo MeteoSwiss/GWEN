@@ -1,52 +1,34 @@
-# Standard library
-from typing import List
-from typing import Optional
-from typing import Tuple
-from typing import Union
-
-# Third-party
 import torch
-from _typeshed import Incomplete as Incomplete
-from torch import nn as nn
-from torch import optim as optim
+from _typeshed import Incomplete
+from gwen.loggers_configs import setup_logger as setup_logger, setup_mlflow as setup_mlflow, suppress_warnings as suppress_warnings
+from gwen.utils import GraphDataset as GraphDataset
+from torch import nn, optim as optim
 from torch.optim import Adam
 from torch.optim.lr_scheduler import CyclicLR
-from torch_geometric.data import Data as Data
-from torch_geometric.loader import DataLoader as DataLoader
+from typing import List, Optional, Union
 
 logger: Incomplete
 
 class TrainingConfigGNN(dict):
-    loader_train_in: DataLoader
-    loader_train_out: DataLoader
+    dataset: GraphDataset
     optimizer: Union[optim.Optimizer, torch.optim.Optimizer, Adam]
     scheduler: Union[CyclicLR, torch.optim.lr_scheduler.CyclicLR]
     loss_fn: Union[nn.Module, nn.MSELoss]
+    batch_size: int
     mask: Optional[torch.Tensor]
     epochs: int
     device: str
     seed: int
-    def __init__(
-        self,
-        loader_train_in,
-        loader_train_out,
-        optimizer,
-        scheduler,
-        loss_fn,
-        mask,
-        epochs,
-        device,
-        seed,
-    ) -> None: ...
+    def __init__(self, dataset, optimizer, scheduler, loss_fn, batch_size, mask, epochs, device, seed) -> None: ...
 
 class EvaluationConfigGNN(dict):
-    loader_in: DataLoader
-    loader_out: DataLoader
+    dataset: GraphDataset
     loss_fn: Union[nn.Module, nn.MSELoss]
     mask: Optional[torch.Tensor]
     device: str
+    batch_size: int
     seed: int
-    def __init__(self, loader_in, loader_out, loss_fn, mask, device, seed) -> None: ...
+    def __init__(self, dataset, loss_fn, mask, device, batch_size, seed) -> None: ...
 
 class GNNConfig(dict):
     nodes_in: int
@@ -54,9 +36,7 @@ class GNNConfig(dict):
     channels_in: int
     channels_out: int
     hidden_feats: int
-    def __init__(
-        self, nodes_in, nodes_out, channels_in, channels_out, hidden_feats
-    ) -> None: ...
+    def __init__(self, nodes_in, nodes_out, channels_in, channels_out, hidden_feats) -> None: ...
 
 class DownConvLayers(torch.nn.Module):
     conv1: Incomplete
@@ -82,20 +62,12 @@ class GCNConvLayers(torch.nn.Module):
     def __init__(self, gnn_configs: GNNConfig) -> None: ...
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor: ...
 
-class TopKPoolingLayer(torch.nn.Module):
-    pool: Incomplete
-    def __init__(self, gnn_configs: GNNConfig) -> None: ...
-    def forward(
-        self, x: torch.Tensor, edge_index: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]: ...
+def loss_func(output, target, target_mask): ...
 
 class GNNModel(torch.nn.Module):
     conv_layers: Incomplete
-    pool_layer: Incomplete
     activation: Incomplete
     def __init__(self, gnn_configs: GNNConfig) -> None: ...
-    def forward(self, data: Data) -> torch.Tensor: ...
-    def train_with_configs(self, configs_train_gnn: TrainingConfigGNN) -> None: ...
-    def eval_with_configs(
-        self, configs_eval_gnn: EvaluationConfigGNN
-    ) -> tuple[float, List[torch.Tensor]]: ...
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor: ...
+    def train_with_configs(self, rank, configs_train_gnn: TrainingConfigGNN, world_size) -> None: ...
+    def eval_gnn_with_configs(self, rank, configs_eval_gnn: EvaluationConfigGNN, world_size, queue) -> tuple[float, List[torch.Tensor]]: ...

@@ -161,8 +161,9 @@ class ConvDataset(Dataset):
         return self.target_indices
 
 
-class GraphDataset(Dataset_GNN):
+class GraphDataset(Dataset_GNN):  # pylint: disable=too-many-instance-attributes
     def __init__(self, xr_data, split, transform=None, pre_transform=None):
+        """Initialize the custom dataset class."""
         super().__init__(root=None, transform=transform, pre_transform=pre_transform)
         self.data = xr_data
         self.split = split
@@ -395,10 +396,7 @@ def get_runs(experiment_name: str) -> List[mlflow.entities.Run]:
 
     def filter_runs(row):
         artifact_uri = row["artifact_uri"]
-        if os.path.isdir(artifact_uri) and os.listdir(artifact_uri):
-            return True
-        else:
-            return False
+        return bool(os.path.isdir(artifact_uri) and os.listdir(artifact_uri))
 
     runs = mlflow.search_runs(
         experiment_names=[experiment_name], order_by=["attributes.start_time DESC"]
@@ -457,27 +455,27 @@ def load_config_and_data() -> Tuple[dict, xr.Dataset, xr.Dataset]:
 
     """
     try:
-        config = load_config()
+        configs = load_config()
 
-        data_train, data_test = load_data(config)
+        data_train, data_test = load_data(configs)
 
-        if config["coarsen"] > 1:
+        if configs["coarsen"] > 1:
             # Coarsen the data
-            if not isinstance(config["coarsen"], int) or config["coarsen"] <= 0:
+            if not isinstance(configs["coarsen"], int) or configs["coarsen"] <= 0:
                 raise ValueError(
                     f"Coarsen factor must be a positive integer, "
-                    f"but got {config['coarsen']}"
+                    f"but got {configs['coarsen']}"
                 )
-            data_test = downscale_data(data_test, config["coarsen"])
-            data_train = downscale_data(data_train, config["coarsen"])
+            data_test = downscale_data(data_test, configs["coarsen"])
+            data_train = downscale_data(data_train, configs["coarsen"])
 
     except (FileNotFoundError, ValueError) as e:
         logger.exception(str(e))
         raise e
-    return config, data_train, data_test
+    return configs, data_train, data_test
 
 
-def load_data(config: dict) -> Tuple[xr.Dataset, xr.Dataset]:
+def load_data(configs: dict) -> Tuple[xr.Dataset, xr.Dataset]:
     """Load training and test data from zarr files and return them as xarray DataArrays.
 
     Args:
@@ -494,7 +492,7 @@ def load_data(config: dict) -> Tuple[xr.Dataset, xr.Dataset]:
     try:
         # Load the training data
         data_train = (
-            xr.open_zarr(str(here()) + config["data_train"]).to_array().squeeze()
+            xr.open_zarr(str(here()) + configs["data_train"]).to_array().squeeze()
         )
         data_train = data_train.transpose(
             "time",
@@ -505,7 +503,7 @@ def load_data(config: dict) -> Tuple[xr.Dataset, xr.Dataset]:
 
         # Load the test data
         data_test = (
-            xr.open_zarr(str(here()) + config["data_test"])
+            xr.open_zarr(str(here()) + configs["data_test"])
             .to_array()
             .squeeze(drop=False)
         )

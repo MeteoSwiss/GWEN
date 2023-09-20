@@ -67,17 +67,13 @@ from gwen.utils import GraphDataset
 from gwen.utils import load_best_model
 from gwen.utils import load_config_and_data
 
-logger = setup_logger()
-suppress_warnings()
-
 # TODO: add dropout layers to all my models!
 
 
-def main():
+def main():  # pylint: disable=too-many-locals, too-many-statements
     ctx = mp.get_context("spawn")
     manager = ctx.Manager()
     queue = manager.Queue(10000)
-    event = mp.Event()
 
     # Load the configuration parameters and the input and output data
     config, data_train, data_test = load_config_and_data()
@@ -156,7 +152,7 @@ def main():
                 )
                 # model.train_with_configs(config_train)
         else:
-            artifact_path, experiment_name = setup_mlflow()
+            _, experiment_name = setup_mlflow()
             model = load_best_model(experiment_name)
 
     except mlflow.exceptions.MlflowException as e:
@@ -172,12 +168,12 @@ def main():
             seed=config["seed"],
         )
 
-        world_size = torch.cuda.device_count()  # TODO: eval on >1 GPU
-        # world_size = 1
+        # world_size = torch.cuda.device_count()  # TODO: eval on >1 GPU
+        world_size = 1
 
         mp.spawn(
             model.eval_gnn_with_configs,
-            args=(config_eval, world_size, queue, event),
+            args=(config_eval, world_size, queue),
             nprocs=world_size,
             join=True,
         )
@@ -226,4 +222,7 @@ def main():
 
 
 if __name__ == "__main__":
+    suppress_warnings()
+    logger = setup_logger()
+    mp.set_start_method("spawn")
     main()

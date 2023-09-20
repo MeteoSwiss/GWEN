@@ -451,7 +451,7 @@ class UNet(BaseNet):
                     out, (x.shape[3] - out.shape[3], 0, 0, 0), mode="replicate"
                 )  # pad the output tensor
             if dist.get_rank() == 0:
-                logger.debug(f"Output UNet shape: {out.shape}")
+                logger.debug("Output UNet shape: %s", out.shape)
 
         except RuntimeError as e:
             logger.error(
@@ -460,7 +460,11 @@ class UNet(BaseNet):
         return out
 
     def train_with_configs(
-        self, rank, configs_train_cnn: TrainingConfigCNN, world_size
+        # pylint: disable=too-many-locals, too-many-statements, too-many-branches
+        self,
+        rank,
+        configs_train_cnn: TrainingConfigCNN,
+        world_size,
     ) -> None:
         """Train the model.
 
@@ -471,7 +475,6 @@ class UNet(BaseNet):
         None
 
         """
-
         os.environ["MASTER_ADDR"] = "localhost"
         os.environ["MASTER_PORT"] = "12355"  # choose an available port
         os.environ["TORCH_DISTRIBUTED_DEBUG"] = "INFO"
@@ -486,7 +489,7 @@ class UNet(BaseNet):
 
         if dist.get_rank() == 0:
             # Train the model with MLflow logging
-            artifact_path, experiment_name = setup_mlflow()
+            _, experiment_name = setup_mlflow()
             MLFlowLogger(experiment_name=experiment_name)
             mlflow.start_run()
 
@@ -562,7 +565,12 @@ class UNet(BaseNet):
             dist.destroy_process_group()
 
     def eval_cnn_with_configs(
-        self, rank, configs_eval_cnn, world_size: EvaluationConfigCNN, queue, event
+        # pylint: disable=too-many-locals, too-many-arguments, too-many-statements
+        self,
+        rank,
+        configs_eval_cnn,
+        world_size: EvaluationConfigCNN,
+        queue,
     ):
         """Evaluate the model.
 
@@ -577,7 +585,7 @@ class UNet(BaseNet):
         os.environ["MASTER_PORT"] = "12355"  # choose an available port
         os.environ["TORCH_DISTRIBUTED_DEBUG"] = "INFO"
         torch.cuda.set_device(rank)
-        dist.init_process_group("nccl", rank=rank, world_size=1)
+        dist.init_process_group("nccl", rank=rank, world_size=world_size)
         # dist.init_process_group(
         #     "nccl", rank=rank, world_size=world_size) #TODO: eval on >1 GPU
         if dist.get_rank() == 0:
@@ -602,71 +610,68 @@ class UNet(BaseNet):
         model = self.to(device)
         model = nn.parallel.DistributedDataParallel(model, find_unused_parameters=True)
         ranks = []
-        try:
-            model.eval()
-            with torch.no_grad():
-                loss: float = 0.0
-                y_preds: List[torch.Tensor] = []
-                for input_data, target_data in dataloader_test:
-                    input_data = input_data.to(device)
-                    target_data = target_data.to(device)
-                    # pylint: disable=not-callable
-                    output = model(input_data)
-                    if configs_eval_cnn.mask is not None:
-                        configs_eval_cnn.mask = configs_eval_cnn.mask.to(device)
-                        loss += configs_eval_cnn.loss_fn(
-                            output,
-                            target_data,
-                            configs_eval_cnn.mask,
-                        )
-                    else:
-                        loss += configs_eval_cnn.loss_fn(output, target_data)
-                    ranks.append(rank)
-                    y_preds.append(output)
-
-                avg_loss = torch.tensor(loss.item() / float(len(dataloader_test))).to(
-                    device
-                )
-                gathered_losses = (
-                    [torch.zeros_like(avg_loss) for _ in range(dist.get_world_size())]
-                    if dist.get_rank() == 0
-                    else []
-                )
-
-                ranks_tensor = torch.tensor(ranks, device=device)
-                ranks_list = [
-                    torch.zeros_like(ranks_tensor) for _ in range(dist.get_world_size())
-                ]
-                y_preds_tensor = torch.cat(y_preds)
-                y_preds_list = [
-                    torch.zeros_like(y_preds_tensor)
-                    for _ in range(dist.get_world_size())
-                ]
-
-                dist.barrier()
-                dist.all_gather(ranks_list, ranks_tensor)
-                dist.all_gather(y_preds_list, y_preds_tensor)
-                dist.gather(avg_loss, gather_list=gathered_losses, dst=0)
-
-                y_preds_ordered = [
-                    y_pred
-                    for _, y_pred in sorted(
-                        zip(ranks_list, y_preds_list), key=lambda x: x[0]
+        model.eval()
+        with torch.no_grad():
+            loss: float = 0.0
+            y_preds: List[torch.Tensor] = []
+            for input_data, target_data in dataloader_test:
+                input_data = input_data.to(device)
+                target_data = target_data.to(device)
+                # pylint: disable=not-callable
+                output = model(input_data)
+                if configs_eval_cnn.mask is not None:
+                    configs_eval_cnn.mask = configs_eval_cnn.mask.to(device)
+                    loss += configs_eval_cnn.loss_fn(
+                        output,
+                        target_data,
+                        configs_eval_cnn.mask,
                     )
-                ]
+                else:
+                    loss += configs_eval_cnn.loss_fn(output, target_data)
+                ranks.append(rank)
+                y_preds.append(output)
 
-                dist.barrier()
-                if dist.get_rank() == 0:
-                    avg_loss_gathered = torch.stack(gathered_losses).mean().item()
-                    y_preds_ordered_tensor = torch.cat(y_preds_ordered)
-                    logger.info("Loss: %f", avg_loss_gathered)
+            avg_loss = torch.tensor(loss.item() / float(len(dataloader_test))).to(
+                device
+            )
+            gathered_losses = (
+                [torch.zeros_like(avg_loss) for _ in range(dist.get_world_size())]
+                if dist.get_rank() == 0
+                else []
+            )
 
-        except RuntimeError as e:
-            logger.error("Error occurred while evaluating UNet network: %s", str(e))
-        finally:
+            ranks_tensor = torch.tensor(ranks, device=device)
+            ranks_list = [
+                torch.zeros_like(ranks_tensor) for _ in range(dist.get_world_size())
+            ]
+            y_preds_tensor = torch.cat(y_preds)
+            y_preds_list = [
+                torch.zeros_like(y_preds_tensor) for _ in range(dist.get_world_size())
+            ]
+
+            dist.barrier()
+            dist.all_gather(ranks_list, ranks_tensor)
+            dist.all_gather(y_preds_list, y_preds_tensor)
+            dist.gather(avg_loss, gather_list=gathered_losses, dst=0)
+
+            y_preds_ordered = [
+                y_pred
+                for _, y_pred in sorted(
+                    zip(ranks_list, y_preds_list), key=lambda x: x[0]
+                )
+            ]
+
+            dist.barrier()
+            if dist.get_rank() == 0:
+                avg_loss_gathered = torch.stack(gathered_losses).mean().item()
+                y_preds_ordered_tensor = torch.cat(y_preds_ordered)
+                logger.info("Loss: %f", avg_loss_gathered)
+
             dist.barrier()
             torch.cuda.synchronize()
             if dist.get_rank() == 0:
-                queue.put((float(avg_loss_gathered), y_preds_ordered_tensor.cpu()))
+                queue.put(  # pylint: disable=used-before-assignment
+                    (float(avg_loss_gathered), y_preds_ordered_tensor.cpu())
+                )
             dist.barrier()
             dist.destroy_process_group()

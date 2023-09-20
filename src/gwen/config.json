@@ -10,7 +10,7 @@
     "lr": 0.00001,
     "mask_threshold": 0.000001,
     "member_split": 124,
-    "retrain": true,
+    "retrain": false,
     "seed": 23,
     "simplify": true,
     "zarr_path": "/scratch/sadamov/icon/icon-nwp/cpu/experiments/data_combined_2.zarr",
