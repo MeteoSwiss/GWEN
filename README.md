@@ -1,4 +1,5 @@
-# GWEN to Generate Weather Model Ensemble Members
+# Graph-based Weather Ensemble Network
+## GWEN generates additional weather model ensemble members by dynamical training of a GNN.
 
 ## Start developing
 
