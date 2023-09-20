@@ -30,7 +30,6 @@ logger = setup_logger()
 
 def main():
     try:
-
         ctx = mp.get_context("spawn")
         manager = ctx.Manager()
         queue = manager.Queue(10000)
@@ -56,8 +55,7 @@ def main():
             # Create a mask that hides all data with zero variance
             mask = variance <= config["mask_threshold"]
             torch.from_numpy(mask.values.astype(float))
-            logger.info("Number of masked cells: %d",
-                        sum((mask[0].values == 1)))
+            logger.info("Number of masked cells: %d", sum((mask[0].values == 1)))
 
         else:
             mask = None
@@ -78,8 +76,7 @@ def main():
             else:
                 model = UNet(
                     channels_in=config["member_split"],
-                    channels_out=data_train.sizes["member"] -
-                    config["member_split"],
+                    channels_out=data_train.sizes["member"] - config["member_split"],
                     hidden_size=config["hidden_feats"],
                 )
 
@@ -102,8 +99,7 @@ def main():
                 device=device,
                 seed=config["seed"],
             )
-            logger.info("Using %d GPUs for Training",
-                        torch.cuda.device_count())
+            logger.info("Using %d GPUs for Training", torch.cuda.device_count())
 
             world_size = torch.cuda.device_count()
             mp.spawn(
@@ -135,20 +131,14 @@ def main():
             seed=config["seed"],
         )
 
-        logger.info("Using %d GPUs for Evaluation",
-                    torch.cuda.device_count())
+        logger.info("Using %d GPUs for Evaluation", torch.cuda.device_count())
 
         # world_size = torch.cuda.device_count() #TODO: eval on >1 GPU
         world_size = 1
 
         mp.spawn(
             model.eval_cnn_with_configs,
-            args=(
-                config_eval,
-                world_size,
-                queue,
-                event
-            ),
+            args=(config_eval, world_size, queue, event),
             nprocs=world_size,
             join=True,
         )
@@ -169,10 +159,13 @@ def main():
         if config["simplify"]:
             slice0, slice1 = (0, 1)
         else:
-            slice0, slice1 = (config["member_split"],
-                              data_test.sizes["member"])
-        y_pred_reshaped = xr.DataArray(y_pred.numpy().reshape(np.array(data_test.isel(
-            member=slice(slice0, slice1)).values).shape), dims=["time", "member", "height", "ncells"])
+            slice0, slice1 = (config["member_split"], data_test.sizes["member"])
+        y_pred_reshaped = xr.DataArray(
+            y_pred.numpy().reshape(
+                np.array(data_test.isel(member=slice(slice0, slice1)).values).shape
+            ),
+            dims=["time", "member", "height", "ncells"],
+        )
 
         data_gif = {
             "y_pred_reshaped": y_pred_reshaped,

@@ -44,8 +44,7 @@ def split_data(
         n_samples = len(data.time)
 
         # Shuffle the indices of the samples
-        indices = np.random.RandomState(
-            seed=random_state).permutation(n_samples)
+        indices = np.random.RandomState(seed=random_state).permutation(n_samples)
 
         # Calculate the number of samples in the test set
         n_test_samples = int(test_size * n_samples)
@@ -87,14 +86,11 @@ def normalize_data(
     """
     try:
         if method == "mean":
-            center: np.floating = np.floating(
-                np.array(data_train_raw.mean().values))
-            scale: np.floating = np.floating(
-                np.array(data_train_raw.std().values))
+            center: np.floating = np.floating(np.array(data_train_raw.mean().values))
+            scale: np.floating = np.floating(np.array(data_train_raw.std().values))
 
         elif method == "median":
-            center = np.nanmedian(
-                np.array(data_train_raw.values)).astype(np.floating)
+            center = np.nanmedian(np.array(data_train_raw.values)).astype(np.floating)
             centered_ds = np.array(data_train_raw.values) - center
             scale = np.nanmedian(np.abs(centered_ds)).astype(np.floating)
 
@@ -109,8 +105,7 @@ def normalize_data(
         return data_train_scaled, data_test_scaled
 
     except Exception as error:
-        logger.exception(
-            "Error occurred while normalizing data: %s", str(error))
+        logger.exception("Error occurred while normalizing data: %s", str(error))
         raise ValueError(
             "Failed to normalize data. Please check the input data and parameters."
         ) from error
@@ -157,8 +152,7 @@ except ValueError as e:
 
 # Normalize the training and testing data
 try:
-    data_train_norm, data_test_norm = normalize_data(
-        data_train, data_test, "mean")
+    data_train_norm, data_test_norm = normalize_data(data_train, data_test, "mean")
 
 except ValueError as e:
     logger.exception("Error occurred while normalizing data: %s", str(e))
@@ -193,8 +187,7 @@ try:
     )
 
 except Exception as e:
-    logger.exception(
-        "Error occurred while chunking and compressing data: %s", str(e))
+    logger.exception("Error occurred while chunking and compressing data: %s", str(e))
     raise ValueError(
         "Failed to chunk and compress data."
         " Please check the input data and parameters."

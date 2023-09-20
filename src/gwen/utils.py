@@ -88,14 +88,16 @@ class ConvDataset(Dataset):
 
             # Split the member indices into input and target sets
             self.input_indices: np.ndarray = member_indices[: self.split]
-            self.target_indices: np.ndarray = member_indices[self.split:]
+            self.target_indices: np.ndarray = member_indices[self.split :]
             if config["simplify"]:
                 simple_input_index = np.random.choice(self.input_indices)
                 self.input_indices = np.array(
-                    [simple_input_index, simple_input_index+1])
+                    [simple_input_index, simple_input_index + 1]
+                )
                 simple_target_index = simple_input_index + 1
                 self.target_indices = np.array(
-                    [simple_target_index, simple_target_index+1])
+                    [simple_target_index, simple_target_index + 1]
+                )
 
         except Exception as e:
             logger.exception("Error initializing custom dataset: %s", e)
@@ -124,19 +126,19 @@ class ConvDataset(Dataset):
         try:
             # Get the data for the input and target sets
             if config["simplify"]:
-                x = self.data.isel(member=slice(
-                    self.input_indices[0], self.input_indices[1]), time=idx)
-                y = self.data.isel(member=slice(
-                    self.target_indices[0], self.target_indices[1]), time=idx)
-            else:
                 x = self.data.isel(
-                    member=self.input_indices, time=idx)
+                    member=slice(self.input_indices[0], self.input_indices[1]), time=idx
+                )
                 y = self.data.isel(
-                    member=self.target_indices, time=idx)
+                    member=slice(self.target_indices[0], self.target_indices[1]),
+                    time=idx,
+                )
+            else:
+                x = self.data.isel(member=self.input_indices, time=idx)
+                y = self.data.isel(member=self.target_indices, time=idx)
 
         except Exception as e:
-            logger.exception(
-                "Error getting data for input and target sets: %s", e)
+            logger.exception("Error getting data for input and target sets: %s", e)
             raise
 
         return x, y
@@ -178,8 +180,8 @@ class GraphDataset(Dataset_GNN):
         np.random.shuffle(member_indices)
 
         # Determine the split index
-        self.input_indices = member_indices[:self.split]
-        self.target_indices = member_indices[self.split:]
+        self.input_indices = member_indices[: self.split]
+        self.target_indices = member_indices[self.split :]
 
         # Calculate channels
         self.channels = self.data.sizes["height"] * self.data.sizes["ncells"]
@@ -189,8 +191,11 @@ class GraphDataset(Dataset_GNN):
 
     def get(self, idx) -> Data:
         # Load only the necessary data
-        x = self.data.isel(member=np.arange(self.nodes), time=idx).stack(
-            features=["height", "ncells"]).load()
+        x = (
+            self.data.isel(member=np.arange(self.nodes), time=idx)
+            .stack(features=["height", "ncells"])
+            .load()
+        )
 
         # Convert to tensor
         x = torch.tensor(x.values, dtype=torch.float)
@@ -227,8 +232,7 @@ def animate(data: xr.Dataset, member: str, preds: str) -> animation.FuncAnimatio
         cmap = cm.get_cmap("RdBu_r")
         cmap.set_bad(color="grey")
 
-        im: AxesImage = data.isel(time=0).plot(
-            ax=ax, cmap=cmap, vmin=vmin, vmax=vmax)
+        im: AxesImage = data.isel(time=0).plot(ax=ax, cmap=cmap, vmin=vmin, vmax=vmax)
 
         plt.gca().invert_yaxis()
 
@@ -362,15 +366,15 @@ def downscale_data(data: xr.Dataset, factor: int) -> xr.Dataset:
 
     """
     if not isinstance(factor, int) or factor <= 0:
-        raise ValueError(
-            f"Factor must be a positive integer, but got {factor}")
+        raise ValueError(f"Factor must be a positive integer, but got {factor}")
 
     with dask.config.set(
         dict[str, bool](**{"array.slicing.split_large_chunks": False})
     ):
         # Coarsen the height and ncells dimensions by the given factor
-        data_coarse = data.coarsen(
-            height=factor, ncells=factor).reduce(np.mean).compute()
+        data_coarse = (
+            data.coarsen(height=factor, ncells=factor).reduce(np.mean).compute()
+        )
         return data_coarse
 
 
@@ -396,8 +400,9 @@ def get_runs(experiment_name: str) -> List[mlflow.entities.Run]:
         else:
             return False
 
-    runs = mlflow.search_runs(experiment_names=[experiment_name], order_by=[
-                              "attributes.start_time DESC"])
+    runs = mlflow.search_runs(
+        experiment_names=[experiment_name], order_by=["attributes.start_time DESC"]
+    )
     filtered_runs = runs[runs.apply(filter_runs, axis=1)]
 
     if len(runs) == 0:
@@ -426,10 +431,8 @@ def load_best_model(experiment_name: str) -> nn.Module:
 
         run_id: str = runs.iloc[0].run_id  # type: ignore [attr-defined]
         best_model_path = mlflow.get_artifact_uri()
-        best_model_path = os.path.abspath(
-            os.path.join(best_model_path, "../../"))
-        best_model_path = os.path.join(
-            best_model_path, run_id, "artifacts", "models")
+        best_model_path = os.path.abspath(os.path.join(best_model_path, "../../"))
+        best_model_path = os.path.join(best_model_path, run_id, "artifacts", "models")
         if not os.path.exists(best_model_path):
             raise FileNotFoundError(
                 f"Best model path does not exist: {best_model_path}"
@@ -491,8 +494,7 @@ def load_data(config: dict) -> Tuple[xr.Dataset, xr.Dataset]:
     try:
         # Load the training data
         data_train = (
-            xr.open_zarr(
-                str(here()) + config["data_train"]).to_array().squeeze()
+            xr.open_zarr(str(here()) + config["data_train"]).to_array().squeeze()
         )
         data_train = data_train.transpose(
             "time",

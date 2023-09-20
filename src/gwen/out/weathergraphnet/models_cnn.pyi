@@ -1,13 +1,21 @@
+# Standard library
+from typing import List
+from typing import Optional
+from typing import Tuple
+from typing import Union
+
+# Third-party
 import torch
 from _typeshed import Incomplete as Incomplete
 from torch import nn
 from torch.optim import Adam
-from torch.optim.lr_scheduler import CyclicLR, StepLR
-from typing import List, Optional, Tuple, Union
+from torch.optim.lr_scheduler import CyclicLR
+from torch.optim.lr_scheduler import StepLR
+
+# First-party
 from gwen.utils import ConvDataset as ConvDataset
 
 logger: Incomplete
-
 
 class TrainingConfigCNN(dict):
     dataset: ConvDataset
@@ -19,9 +27,18 @@ class TrainingConfigCNN(dict):
     epochs: int
     device: str
     seed: int
-    def __init__(self, dataset, optimizer, scheduler, loss_fn,
-                 batch_size, mask, epochs, device, seed) -> None: ...
-
+    def __init__(
+        self,
+        dataset,
+        optimizer,
+        scheduler,
+        loss_fn,
+        batch_size,
+        mask,
+        epochs,
+        device,
+        seed,
+    ) -> None: ...
 
 class EvaluationConfigCNN(dict):
     dataset: ConvDataset
@@ -30,9 +47,7 @@ class EvaluationConfigCNN(dict):
     mask: Optional[torch.Tensor]
     device: str
     seed: int
-    def __init__(self, dataset, loss_fn, batch_size,
-                 mask, device, seed) -> None: ...
-
+    def __init__(self, dataset, loss_fn, batch_size, mask, device, seed) -> None: ...
 
 class BaseNet(nn.Module):
     activation: Incomplete
@@ -44,38 +59,36 @@ class BaseNet(nn.Module):
     batch_norm_layers: Incomplete
     maxpool: Incomplete
     upsample: Incomplete
-    def __init__(self, channels_in: int, channels_out: int,
-                 hidden_size: int) -> None: ...
-
+    def __init__(
+        self, channels_in: int, channels_out: int, hidden_size: int
+    ) -> None: ...
     def forward(self, x) -> None: ...
-
 
 class Encoder(BaseNet):
-    def __init__(self, channels_in: int, channels_out: int,
-                 hidden_size: int) -> None: ...
-
+    def __init__(
+        self, channels_in: int, channels_out: int, hidden_size: int
+    ) -> None: ...
     def forward(self, x) -> None: ...
-
 
 class Decoder(BaseNet):
-    def __init__(self, channels_in: int, channels_out: int,
-                 hidden_size: int) -> None: ...
-    def crop(self, encoder_layer: torch.Tensor,
-             decoder_layer: torch.Tensor) -> torch.Tensor: ...
-
+    def __init__(
+        self, channels_in: int, channels_out: int, hidden_size: int
+    ) -> None: ...
+    def crop(
+        self, encoder_layer: torch.Tensor, decoder_layer: torch.Tensor
+    ) -> torch.Tensor: ...
     def forward(self, x) -> None: ...
-
 
 class UNet(BaseNet):
     encoder: Incomplete
     decoder: Incomplete
-    def __init__(self, channels_in: int, channels_out: int,
-                 hidden_size: int) -> None: ...
-
+    def __init__(
+        self, channels_in: int, channels_out: int, hidden_size: int
+    ) -> None: ...
     def forward(self, x) -> None: ...
-
     def train_with_configs(
-        self, rank, configs_train_cnn: TrainingConfigCNN, world_size) -> None: ...
-
+        self, rank, configs_train_cnn: TrainingConfigCNN, world_size
+    ) -> None: ...
     def eval_with_configs(
-        self, configs_eval_cnn: EvaluationConfigCNN) -> Tuple[float, List[torch.Tensor]]: ...
+        self, configs_eval_cnn: EvaluationConfigCNN
+    ) -> Tuple[float, List[torch.Tensor]]: ...

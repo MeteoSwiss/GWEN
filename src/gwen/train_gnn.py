@@ -62,8 +62,8 @@ from gwen.models_gnn import EvaluationConfigGNN
 from gwen.models_gnn import GNNConfig
 from gwen.models_gnn import GNNModel
 from gwen.models_gnn import TrainingConfigGNN
-from gwen.utils import GraphDataset
 from gwen.utils import create_animation
+from gwen.utils import GraphDataset
 from gwen.utils import load_best_model
 from gwen.utils import load_config_and_data
 
@@ -74,7 +74,6 @@ suppress_warnings()
 
 
 def main():
-
     ctx = mp.get_context("spawn")
     manager = ctx.Manager()
     queue = manager.Queue(10000)
@@ -96,8 +95,7 @@ def main():
             # Create a mask that hides all data with zero variance
             mask = variance <= config["mask_threshold"]
             torch.from_numpy(mask.values.astype(float))
-            logger.info("Number of masked cells: %d",
-                        (mask[0].values == 1).sum())
+            logger.info("Number of masked cells: %d", (mask[0].values == 1).sum())
         else:
             mask = None
     except (ValueError, TypeError) as e:
@@ -114,7 +112,7 @@ def main():
                 hidden_feats=config["hidden_feats"],
             )
             model = GNNModel(gnn_config)
-            optimizer = optim.Adam(model.parameters(), lr=config["lr"]*10)
+            optimizer = optim.Adam(model.parameters(), lr=config["lr"] * 10)
             # scheduler = CyclicLR(
             #     optimizer,
             #     base_lr=config["lr"],
@@ -144,8 +142,7 @@ def main():
                     )
                 )
                 # Pass the TrainingConfig object to the train method
-                logger.info("Using %d GPUs for Training",
-                            torch.cuda.device_count())
+                logger.info("Using %d GPUs for Training", torch.cuda.device_count())
 
                 world_size = torch.cuda.device_count()
                 mp.spawn(
@@ -180,12 +177,7 @@ def main():
 
         mp.spawn(
             model.eval_gnn_with_configs,
-            args=(
-                config_eval,
-                world_size,
-                queue,
-                event
-            ),
+            args=(config_eval, world_size, queue, event),
             nprocs=world_size,
             join=True,
         )
@@ -201,12 +193,12 @@ def main():
     try:
         # Plot the predictions
         # TODO: This might have changed check data_test_out dims
-        y_pred_reshaped = xr.DataArray(y_pred.numpy().reshape(
-            np.array(data_test.values).shape), dims=["time", "member", "height", "ncells"])
-
-        logger.info(
-            "The shape of the raw model prediction: %s", y_pred.numpy().shape
+        y_pred_reshaped = xr.DataArray(
+            y_pred.numpy().reshape(np.array(data_test.values).shape),
+            dims=["time", "member", "height", "ncells"],
         )
+
+        logger.info("The shape of the raw model prediction: %s", y_pred.numpy().shape)
         logger.info("Reshaped into form: %s", y_pred_reshaped.shape)
         data_gif = {
             "y_pred_reshaped": y_pred_reshaped,

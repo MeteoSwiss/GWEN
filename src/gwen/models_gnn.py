@@ -18,12 +18,11 @@ from torch.optim.lr_scheduler import CyclicLR
 from torch_geometric.loader import NeighborLoader  # type: ignore
 from torch_geometric.nn import GCNConv  # type: ignore
 
+# First-party
 from gwen.loggers_configs import setup_logger
 from gwen.loggers_configs import setup_mlflow
 from gwen.loggers_configs import suppress_warnings
 from gwen.utils import GraphDataset
-
-# First-party
 
 logger = setup_logger()
 
@@ -116,8 +115,7 @@ class DownConvLayers(torch.nn.Module):
         """
         super().__init__()
         try:
-            self.conv1 = GCNConv(gnn_configs.channels_in,
-                                 gnn_configs.hidden_feats)
+            self.conv1 = GCNConv(gnn_configs.channels_in, gnn_configs.hidden_feats)
             self.conv2 = GCNConv(
                 gnn_configs.hidden_feats, gnn_configs.hidden_feats // 2
             )
@@ -131,8 +129,7 @@ class DownConvLayers(torch.nn.Module):
                 gnn_configs.hidden_feats // 8, gnn_configs.hidden_feats // 16
             )
         except KeyError as e:
-            logger.error(
-                "Error occurred while initializing DownConvLayers: %s", e)
+            logger.error("Error occurred while initializing DownConvLayers: %s", e)
             raise
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
@@ -184,11 +181,9 @@ class UpConvLayers(torch.nn.Module):
             self.upconv4 = GCNConv(
                 gnn_configs.hidden_feats // 2, gnn_configs.hidden_feats
             )
-            self.upconv5 = GCNConv(
-                gnn_configs.hidden_feats, gnn_configs.channels_out)
+            self.upconv5 = GCNConv(gnn_configs.hidden_feats, gnn_configs.channels_out)
         except KeyError as e:
-            logger.error(
-                "Error occurred while initializing UpConvLayers: %s", e)
+            logger.error("Error occurred while initializing UpConvLayers: %s", e)
             raise
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
@@ -308,7 +303,8 @@ class GNNModel(torch.nn.Module):
         return x
 
     def train_with_configs(
-            self, rank, configs_train_gnn: TrainingConfigGNN, world_size) -> None:
+        self, rank, configs_train_gnn: TrainingConfigGNN, world_size
+    ) -> None:
         """Train a GNN model and output data using the specified loss function.
 
         Args:
@@ -323,8 +319,7 @@ class GNNModel(torch.nn.Module):
         os.environ["MASTER_ADDR"] = "localhost"
         os.environ["MASTER_PORT"] = "12355"  # choose an available port
         torch.cuda.set_device(rank)
-        dist.init_process_group(
-            "nccl", rank=rank, world_size=world_size)
+        dist.init_process_group("nccl", rank=rank, world_size=world_size)
         if dist.get_rank() == 0:
             print("Training UNet network with configurations:", flush=True)
             print(configs_train_gnn, flush=True)
@@ -354,9 +349,9 @@ class GNNModel(torch.nn.Module):
                 for data in configs_train_gnn.dataset:
                     data_loader = NeighborLoader(
                         data,
-                        num_neighbors=[-1]*2,
+                        num_neighbors=[-1] * 2,
                         batch_size=configs_train_gnn.batch_size,
-                        shuffle=False
+                        shuffle=False,
                     )
                     for data_flow in data_loader:
                         node_features = data_flow.x.to(device)
@@ -369,8 +364,7 @@ class GNNModel(torch.nn.Module):
                         output = model(node_features, edge_index)
 
                         # Use the target data from the subgraph and the cropped mask
-                        loss = loss_func(
-                            output, node_features, target_mask)
+                        loss = loss_func(output, node_features, target_mask)
 
                         loss.backward()
                         configs_train_gnn.optimizer.step()
@@ -390,20 +384,14 @@ class GNNModel(torch.nn.Module):
                     mlflow.pytorch.log_model(model.to("cpu"), "models")
 
         except RuntimeError as e:
-            logger.error(
-                "Error occurred while training GNN: %s", str(e))
+            logger.error("Error occurred while training GNN: %s", str(e))
 
         if dist.get_rank() == 0:
             mlflow.end_run()
             dist.destroy_process_group()
 
     def eval_gnn_with_configs(
-        self,
-        rank,
-        configs_eval_gnn: EvaluationConfigGNN,
-        world_size,
-        queue,
-        event
+        self, rank, configs_eval_gnn: EvaluationConfigGNN, world_size, queue, event
     ) -> tuple[float, List[torch.Tensor]]:
         """Evaluate the performance of the GNN model on a given dataset.
 
@@ -419,8 +407,7 @@ class GNNModel(torch.nn.Module):
         os.environ["MASTER_PORT"] = "12355"  # choose an available port
         os.environ["TORCH_DISTRIBUTED_DEBUG"] = "INFO"
         torch.cuda.set_device(rank)
-        dist.init_process_group(
-            "nccl", rank=rank, world_size=1)
+        dist.init_process_group("nccl", rank=rank, world_size=1)
         # dist.init_process_group(
         #     "nccl", rank=rank, world_size=world_size) #TODO: eval on >1 GPU
         if dist.get_rank() == 0:
@@ -442,9 +429,9 @@ class GNNModel(torch.nn.Module):
             for data in configs_eval_gnn.dataset:
                 data_loader = NeighborLoader(
                     data,
-                    num_neighbors=[-1]*2,
+                    num_neighbors=[-1] * 2,
                     batch_size=configs_eval_gnn.batch_size,
-                    shuffle=False
+                    shuffle=False,
                 )
                 for data_flow in data_loader:
                     node_features = data_flow.x.to(device)
@@ -458,15 +445,20 @@ class GNNModel(torch.nn.Module):
 
             avg_loss = running_loss / float(len(configs_eval_gnn.dataset))
             avg_loss = avg_loss.to(device)
-            gathered_losses = [torch.zeros_like(avg_loss) for _ in range(
-                dist.get_world_size())] if dist.get_rank() == 0 else []
+            gathered_losses = (
+                [torch.zeros_like(avg_loss) for _ in range(dist.get_world_size())]
+                if dist.get_rank() == 0
+                else []
+            )
 
             ranks_tensor = torch.tensor(ranks, device=device)
-            ranks_list = [torch.zeros_like(ranks_tensor)
-                          for _ in range(dist.get_world_size())]
+            ranks_list = [
+                torch.zeros_like(ranks_tensor) for _ in range(dist.get_world_size())
+            ]
             y_preds_tensor = torch.cat(y_preds)
-            y_preds_list = [torch.zeros_like(y_preds_tensor)
-                            for _ in range(dist.get_world_size())]
+            y_preds_list = [
+                torch.zeros_like(y_preds_tensor) for _ in range(dist.get_world_size())
+            ]
 
             dist.barrier()
             dist.all_gather(ranks_list, ranks_tensor)
@@ -474,19 +466,21 @@ class GNNModel(torch.nn.Module):
             dist.gather(avg_loss, gather_list=gathered_losses, dst=0)
 
             print(ranks_list, flush=True)
-            y_preds_ordered = [y_pred for _, y_pred in sorted(
-                zip(ranks_list, y_preds_list), key=lambda x: x[0])]
+            y_preds_ordered = [
+                y_pred
+                for _, y_pred in sorted(
+                    zip(ranks_list, y_preds_list), key=lambda x: x[0]
+                )
+            ]
 
             dist.barrier()
             if dist.get_rank() == 0:
-                avg_loss_gathered = torch.stack(
-                    gathered_losses).mean()
+                avg_loss_gathered = torch.stack(gathered_losses).mean()
                 y_preds_ordered_tensor = torch.cat(y_preds_ordered)
                 logger.info("Loss: %f", avg_loss_gathered)
             dist.barrier()
             torch.cuda.synchronize()
             if dist.get_rank() == 0:
-                queue.put((float(avg_loss_gathered),
-                          y_preds_ordered_tensor.cpu()))
+                queue.put((float(avg_loss_gathered), y_preds_ordered_tensor.cpu()))
             dist.barrier()
             dist.destroy_process_group()

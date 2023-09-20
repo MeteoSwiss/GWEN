@@ -179,11 +179,9 @@ def create_update_function(
     """
 
     def update(frame: int) -> AxesImage:
-        time_in_seconds = round(
-            (var.time[frame] - var.time[0]).item() * 24 * 3600)
+        time_in_seconds = round((var.time[frame] - var.time[0]).item() * 24 * 3600)
         im.set_array(var.isel(time=frame))
-        plt.title(
-            f"Var: {var_name}; Time: {time_in_seconds:.0f} s\n{member_name}")
+        plt.title(f"Var: {var_name}; Time: {time_in_seconds:.0f} s\n{member_name}")
         return im
 
     return update
@@ -268,8 +266,7 @@ def main(input_file: str, var_name: str, out_dir: str) -> None:
         # Save the animation
         try:
             logger.info("Saving animation for member %s", member_filename)
-            save_animation(
-                ani, f"{out_dir}/animation_{str(member_filename)}_ICON.gif")
+            save_animation(ani, f"{out_dir}/animation_{str(member_filename)}_ICON.gif")
         except RuntimeError as error:
             logger.error("Error in saving the animation: %s", error)
 
@@ -312,8 +309,7 @@ if __name__ == "__main__":
         )
         in_var = input("Enter the name of the variable to plot: ") or "theta_v"
         out_directory = (
-            input("Enter the path to the output directory: ") or str(
-                here()) + "/output"
+            input("Enter the path to the output directory: ") or str(here()) + "/output"
         )
 
         main(in_file, in_var, out_directory)

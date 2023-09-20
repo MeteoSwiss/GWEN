@@ -6,9 +6,9 @@ import os
 # Third-party
 import pytest
 import xarray as xr
-from gwen.loggers_configs import setup_mlflow
 
 # First-party
+from gwen.loggers_configs import setup_mlflow
 from gwen.models_cnn import UNet
 from gwen.models_gnn import GNNModel
 from gwen.utils import load_best_model
@@ -19,9 +19,7 @@ from gwen.utils import load_data
 @pytest.fixture(scope="module")
 def config():
     with open(
-        os.path.join(
-            os.path.dirname(__file__), "../../src/gwen/config.json"
-        ),
+        os.path.join(os.path.dirname(__file__), "../../src/gwen/config.json"),
         "r",
         encoding="UTF-8",
     ) as f:

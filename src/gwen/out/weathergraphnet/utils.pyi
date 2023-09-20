@@ -1,3 +1,9 @@
+# Standard library
+from typing import Any
+from typing import List
+from typing import Tuple
+
+# Third-party
 import mlflow as mlflow
 import numpy as np
 import xarray as xr
@@ -5,7 +11,6 @@ from _typeshed import Incomplete as Incomplete
 from matplotlib import animation as animation
 from torch import nn
 from torch.utils.data import Dataset
-from typing import Any, List, Tuple
 
 logger: Incomplete
 
@@ -33,7 +38,9 @@ class ConvDataset(Dataset):
     def __getitem__(self, idx: int) -> Tuple[np.ndarray, np.ndarray]: ...
     def __iter__(self): ...
 
-def animate(data: xr.Dataset, member: int = ..., preds: str = ...) -> animation.FuncAnimation: ...
+def animate(
+    data: xr.Dataset, member: int = ..., preds: str = ...
+) -> animation.FuncAnimation: ...
 def create_animation(data: dict, member: int, preds: str) -> str: ...
 def downscale_data(data: xr.Dataset, factor: int) -> xr.Dataset: ...
 def get_runs(experiment_name: str) -> List[mlflow.entities.Run]: ...

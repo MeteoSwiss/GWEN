@@ -28,13 +28,13 @@ jobs:
         show-channel-urls: true
     - name: Create env from unpinned reqs
       run: |
-        conda env create --name dev_env --file requirements/requirements_nocuda.yml
+        mamba env create --name dev_env --file requirements/requirements_nocuda.yml
     - name: Install project into env
       run: |
-        conda run --name dev_env pip install --no-deps .
+        mamba run --name dev_env pip install --no-deps .
     - name: Install pre-commit hooks
       run: |
-        conda run --name dev_env pre-commit install-hooks
+        mamba run --name dev_env pre-commit install-hooks
     - name: Run pre-commit hooks
       run: |
-        conda run --name dev_env pre-commit run --all-files
+        mamba run --name dev_env pre-commit run --all-files

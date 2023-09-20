@@ -4,7 +4,7 @@ This module contains the following classes:
     CRPSLoss: Continuous Ranked Probability Score (CRPS) loss function.
     EnsembleVarRegLoss: Ensemble variance regularization loss function.
     MaskedLoss: Masked loss function.
-    
+
 """
 # Standard library
 from typing import Any
@@ -14,6 +14,7 @@ import torch
 from torch import nn
 from torch.distributions import Normal
 
+# First-party
 from gwen.loggers_configs import setup_logger
 
 logger = setup_logger()
@@ -64,8 +65,7 @@ class CRPSLoss(nn.Module):
 
             # Calculate the CRPS loss for each sample in the batch Mean over ensemble
             # members and spatial locations
-            crps_loss = torch.mean(
-                (dist.cdf(target) - 0.5) ** 2, dim=[1, 2, 3])
+            crps_loss = torch.mean((dist.cdf(target) - 0.5) ** 2, dim=[1, 2, 3])
 
             return crps_loss
         except Exception as e:

@@ -1,4 +1,7 @@
+# Standard library
 import unittest
+
+# Third-party
 from _typeshed import Incomplete as Incomplete
 
 class TestGNNModel(unittest.TestCase):

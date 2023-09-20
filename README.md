@@ -18,6 +18,8 @@ tools/setup_env.sh -u -e -n <package_env_name>
 
 *Hint*: If you are the package administrator, it is a good idea to understand what this script does, you can do everything manually with `conda` instructions.
 
+*Hint*: If you require GPU support, make sure to run the script on a compute node.
+
 *Hint*: Use the flag `-m` to speed up the installation using mamba. Of course you will have to install mamba first (we recommend to install mamba into your base
 environment `conda install -c conda-forge mamba`. If you install mamba in another (maybe dedicated) environment, environments installed with mamba will be located
 in `<miniconda_root_dir>/envs/mamba/envs`, which is not very practical.

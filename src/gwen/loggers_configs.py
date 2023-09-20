@@ -7,11 +7,10 @@ import socket
 import warnings
 from typing import Tuple
 
+# Third-party
 import matplotlib
 import mlflow
 from pyprojroot import here
-
-# Third-party
 from torch import distributed as dist
 
 # Create a logger object
@@ -62,9 +61,7 @@ def setup_logger() -> logging.Logger:
 
 def load_config():
     """Load the configuration for the gwen project."""
-    with open(
-        str(here()) + "/src/gwen/config.json", "r", encoding="UTF-8"
-    ) as f:
+    with open(str(here()) + "/src/gwen/config.json", "r", encoding="UTF-8") as f:
         config = json.load(f)
     return config
 
@@ -105,16 +102,20 @@ def setup_mlflow() -> Tuple[str, str]:
 def suppress_warnings():
     """Suppresses certain warnings that are not relevant to the user."""
     warnings.simplefilter("always")
-    warnings.filterwarnings(
-        "ignore", category=matplotlib.MatplotlibDeprecationWarning)
+    warnings.filterwarnings("ignore", category=matplotlib.MatplotlibDeprecationWarning)
     warnings.filterwarnings("ignore", message="Setuptools is replacing dist")
     warnings.filterwarnings(
         "ignore",
-        message="Encountered an unexpected error while inferring pip requirements"
+        message="Encountered an unexpected error while inferring pip requirements",
     )
-    warnings.filterwarnings("ignore",
-                            message=re.escape("Using '") + ".*" + re.escape(
-                                "' without a 'pyg-lib' installation is deprecated and "
-                                "will be removed soon. Please install 'pyg-lib' for "
-                                "accelerated neighborhood sampling"),
-                            category=UserWarning)
+    warnings.filterwarnings(
+        "ignore",
+        message=re.escape("Using '")
+        + ".*"
+        + re.escape(
+            "' without a 'pyg-lib' installation is deprecated and "
+            "will be removed soon. Please install 'pyg-lib' for "
+            "accelerated neighborhood sampling"
+        ),
+        category=UserWarning,
+    )

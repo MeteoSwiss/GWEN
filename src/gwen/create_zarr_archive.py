@@ -74,8 +74,7 @@ def load_data(config: dict) -> None:
 
                     # Specify the encoding for theta_v
                     if "theta_v" in data:
-                        data["theta_v"].encoding = {
-                            "compressor": config["compressor"]}
+                        data["theta_v"].encoding = {"compressor": config["compressor"]}
 
                     data = data.assign_coords(member=match.group(1))
                     data = data.expand_dims({"member": 1})
