@@ -113,6 +113,6 @@ venv_*/
 output
 data
 mlruns
-src/weathergraphnet/example_gnn.py
-src/weathergraphnet/SAL.py
+src/gwen/example_gnn.py
+src/gwen/SAL.py
 logs

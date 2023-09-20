@@ -3,18 +3,11 @@ requires = ["setuptools>=65", "wheel>=0.38"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "weathergraphnet"
+name = "gwen"
 version = "0.1.0"
-description = "Simon Adamov's WeatherGraphNet to Generate Weather Model Ensemble Members"
+description = "GWEN - a Graph Neural Network to Generate Weather Model Ensemble Members"
 readme = "README.md"
-keywords = [
-    "WeatherGraphNet",
-    "GNN",
-    "DeepLearning",
-    "Ensembles",
-    "ICON",
-    "WeatherML",
-]
+keywords = ["GWEN", "GNN", "DeepLearning", "Ensembles", "ICON", "WeatherML"]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Developers",
@@ -26,12 +19,12 @@ requires-python = ">=3.10"
 authors = [{ name = "Simon Adamov", email = "simon.adamov@meteoswiss.ch" }]
 
 [project.urls]
-source = "https://github.com/MeteoSwiss/weathergraphnet"
-documentation = "https://github.io/MeteoSwiss/weathergraphnet"
+source = "https://github.com/MeteoSwiss/gwen"
+documentation = "https://github.io/MeteoSwiss/gwen"
 
 [project.scripts]
 # Format: <command> = "<package>.<module>:<function>"
-# weathergraphnet = "weathergraphnet.cli:main"
+# gwen = "gwen.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -40,7 +33,7 @@ addopts = [
     "-ra",
     "--pdbcls=IPython.terminal.debugger:TerminalPdb",
     "--tb=short",
-    # "--cov=weathergraphnet",
+    # "--cov=gwen",
     # "--mypy",
 ]
 
@@ -72,7 +65,7 @@ known_third_party = [
 ]
 known_first_party = [
     # Add first-party modules that may be misclassified by isort
-    "weathergraphnet",
+    "gwen",
 ]
 
 [tool.mypy]

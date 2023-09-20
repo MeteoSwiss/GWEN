@@ -8,13 +8,13 @@ import torch
 from torch import Tensor
 
 # First-party
-from weathergraphnet.models_cnn import EvaluationConfigCNN
-from weathergraphnet.models_cnn import TrainingConfigCNN
-from weathergraphnet.models_cnn import UNet
-from weathergraphnet.models_gnn import EvaluationConfigGNN
-from weathergraphnet.models_gnn import GNNConfig
-from weathergraphnet.models_gnn import GNNModel
-from weathergraphnet.models_gnn import TrainingConfigGNN
+from gwen.models_cnn import EvaluationConfigCNN
+from gwen.models_cnn import TrainingConfigCNN
+from gwen.models_cnn import UNet
+from gwen.models_gnn import EvaluationConfigGNN
+from gwen.models_gnn import GNNConfig
+from gwen.models_gnn import GNNModel
+from gwen.models_gnn import TrainingConfigGNN
 
 
 class TestGNNModel(unittest.TestCase):

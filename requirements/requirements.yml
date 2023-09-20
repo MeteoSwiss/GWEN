@@ -1,4 +1,4 @@
-name: weathergraphnet
+name: gwen
 channels:
   - conda-forge
   - nvidia

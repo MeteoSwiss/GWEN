@@ -1,4 +1,4 @@
-"""Utility functions and classes for the WeatherGraphNet project.
+"""Utility functions and classes for the gwen project.
 
 Classes:
     ConvDataset: Custom dataset class.
@@ -39,9 +39,9 @@ from torch_geometric.data import Dataset as Dataset_GNN
 from torch_geometric.utils import erdos_renyi_graph
 
 # First-party
-from weathergraphnet.create_gif import get_member_name
-from weathergraphnet.loggers_configs import load_config
-from weathergraphnet.loggers_configs import setup_logger
+from gwen.create_gif import get_member_name
+from gwen.loggers_configs import load_config
+from gwen.loggers_configs import setup_logger
 
 logger = setup_logger()
 config = load_config()
@@ -442,7 +442,7 @@ def load_best_model(experiment_name: str) -> nn.Module:
 
 
 def load_config_and_data() -> Tuple[dict, xr.Dataset, xr.Dataset]:
-    """Load configuration and data for the weathergraphnet project.
+    """Load configuration and data for the gwen project.
 
     Returns:
         Tuple[dict, xr.Dataset, xr.Dataset]: A tuple containing the configuration

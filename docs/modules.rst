@@ -2,5 +2,5 @@
 Modules
 =======
 
-.. automodule:: weathergraphnet.utils
+.. automodule:: gwen.utils
    :members:

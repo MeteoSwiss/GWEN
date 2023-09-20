@@ -1,4 +1,4 @@
-# WeatherGraphNet to Generate Weather Model Ensemble Members
+# GWEN to Generate Weather Model Ensemble Members
 
 ## Start developing
 

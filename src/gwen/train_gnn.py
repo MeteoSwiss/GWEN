@@ -54,18 +54,18 @@ from torch import nn
 from torch import optim
 
 # First-party
-from weathergraphnet.loggers_configs import setup_logger
-from weathergraphnet.loggers_configs import setup_mlflow
-from weathergraphnet.loggers_configs import suppress_warnings
-from weathergraphnet.loss_functions import MaskedLoss
-from weathergraphnet.models_gnn import EvaluationConfigGNN
-from weathergraphnet.models_gnn import GNNConfig
-from weathergraphnet.models_gnn import GNNModel
-from weathergraphnet.models_gnn import TrainingConfigGNN
-from weathergraphnet.utils import GraphDataset
-from weathergraphnet.utils import create_animation
-from weathergraphnet.utils import load_best_model
-from weathergraphnet.utils import load_config_and_data
+from gwen.loggers_configs import setup_logger
+from gwen.loggers_configs import setup_mlflow
+from gwen.loggers_configs import suppress_warnings
+from gwen.loss_functions import MaskedLoss
+from gwen.models_gnn import EvaluationConfigGNN
+from gwen.models_gnn import GNNConfig
+from gwen.models_gnn import GNNModel
+from gwen.models_gnn import TrainingConfigGNN
+from gwen.utils import GraphDataset
+from gwen.utils import create_animation
+from gwen.utils import load_best_model
+from gwen.utils import load_config_and_data
 
 logger = setup_logger()
 suppress_warnings()

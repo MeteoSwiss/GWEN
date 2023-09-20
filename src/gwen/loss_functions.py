@@ -14,7 +14,7 @@ import torch
 from torch import nn
 from torch.distributions import Normal
 
-from weathergraphnet.loggers_configs import setup_logger
+from gwen.loggers_configs import setup_logger
 
 logger = setup_logger()
 

@@ -20,9 +20,9 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
 # First-party
-from weathergraphnet.loggers_configs import setup_logger
-from weathergraphnet.loggers_configs import setup_mlflow
-from weathergraphnet.utils import ConvDataset
+from gwen.loggers_configs import setup_logger
+from gwen.loggers_configs import setup_mlflow
+from gwen.utils import ConvDataset
 
 logger = setup_logger()
 

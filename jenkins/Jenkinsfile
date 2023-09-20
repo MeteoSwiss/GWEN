@@ -35,8 +35,8 @@ pipeline {
                 source ${WORKSPACE}/miniconda/etc/profile.d/conda.sh
                 conda init bash --no-user --install --system
                 conda activate
-                bash tools/setup_env.sh -n weathergraphnet -u
-                conda activate weathergraphnet
+                bash tools/setup_env.sh -n gwen -u
+                conda activate gwen
                 pip install --no-deps .
                 '''
             }
@@ -46,7 +46,7 @@ pipeline {
                 sh '''#!/usr/bin/env bash
                 source $WORKSPACE/miniconda/etc/profile.d/conda.sh
                 conda init bash --no-user --install --system
-                conda activate weathergraphnet
+                conda activate gwen
                 pytest tests
                 '''
             }
@@ -58,8 +58,8 @@ pipeline {
                 source $WORKSPACE/miniconda/etc/profile.d/conda.sh
                 conda init bash --no-user --install --system
                 conda activate
-                bash tools/setup_env.sh -n dev-weathergraphnet -u
-                conda activate dev-weathergraphnet
+                bash tools/setup_env.sh -n dev-gwen -u
+                conda activate dev-gwen
                 pip install --no-deps --editable .
                 '''
             }
@@ -69,7 +69,7 @@ pipeline {
                 sh '''#!/usr/bin/env bash
                 source $WORKSPACE/miniconda/etc/profile.d/conda.sh
                 conda init bash --no-user --install --system
-                conda activate dev-weathergraphnet
+                conda activate dev-gwen
                 pytest tests
                 '''
             }
@@ -81,8 +81,8 @@ pipeline {
                 source $WORKSPACE/miniconda/etc/profile.d/conda.sh
                 conda init bash --no-user --install --system
                 conda activate
-                bash tools/setup_env.sh -n pinned-weathergraphnet
-                conda activate pinned-weathergraphnet
+                bash tools/setup_env.sh -n pinned-gwen
+                conda activate pinned-gwen
                 pip install --no-deps .
                 '''
             }
@@ -91,7 +91,7 @@ pipeline {
             steps {
                 sh '''#!/usr/bin/env bash
                 source $WORKSPACE/miniconda/etc/profile.d/conda.sh
-                conda activate pinned-weathergraphnet
+                conda activate pinned-gwen
                 pytest tests
                 '''
             }
@@ -103,8 +103,8 @@ pipeline {
                 source $WORKSPACE/miniconda/etc/profile.d/conda.sh
                 conda init bash --no-user --install --system
                 conda activate
-                bash tools/setup_env.sh -n pinned-dev-weathergraphnet
-                conda activate pinned-dev-weathergraphnet
+                bash tools/setup_env.sh -n pinned-dev-gwen
+                conda activate pinned-dev-gwen
                 pip install --no-deps --editable .
                 '''
             }
@@ -113,7 +113,7 @@ pipeline {
             steps {
                 sh '''#!/usr/bin/env bash
                 source $WORKSPACE/miniconda/etc/profile.d/conda.sh
-                conda activate pinned-dev-weathergraphnet
+                conda activate pinned-dev-gwen
                 pytest tests
                 '''
             }

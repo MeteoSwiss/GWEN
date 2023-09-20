@@ -1,4 +1,4 @@
-* WeatherGraphNet version:
+* gwen version:
 * Python version:
 * Operating System:
 

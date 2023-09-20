@@ -1,4 +1,4 @@
-"""Provide logging for the weathergraphnet package."""
+"""Provide logging for the gwen package."""
 # Standard library
 import json
 import logging
@@ -20,7 +20,7 @@ logger.setLevel(logging.INFO)
 
 
 def setup_logger() -> logging.Logger:
-    """Set up a logger for the weathergraphnet package.
+    """Set up a logger for the gwen package.
 
     The logger will log to the console and to a file called "logfile.log" in the
     current working directory.
@@ -61,9 +61,9 @@ def setup_logger() -> logging.Logger:
 
 
 def load_config():
-    """Load the configuration for the weathergraphnet project."""
+    """Load the configuration for the gwen project."""
     with open(
-        str(here()) + "/src/weathergraphnet/config.json", "r", encoding="UTF-8"
+        str(here()) + "/src/gwen/config.json", "r", encoding="UTF-8"
     ) as f:
         config = json.load(f)
     return config
@@ -81,12 +81,12 @@ def setup_mlflow() -> Tuple[str, str]:
         if "nid" in hostname:
             artifact_path = (
                 "/scratch/e1000/meteoswiss/scratch/sadamov/"
-                "pyprojects_data/weathergraphnet/mlruns"
+                "pyprojects_data/gwen/mlruns"
             )
-            experiment_name = "WGN_balfrin"
+            experiment_name = "GWEN_balfrin"
         else:
-            artifact_path = "/scratch/sadamov/pyprojects_data/weathergraphnet/mlruns"
-            experiment_name = "WGN"
+            artifact_path = "/scratch/sadamov/pyprojects_data/gwen/mlruns"
+            experiment_name = "GWEN"
 
         mlflow.set_tracking_uri(str(here()) + "/mlruns")
         existing_experiment = mlflow.get_experiment_by_name(experiment_name)

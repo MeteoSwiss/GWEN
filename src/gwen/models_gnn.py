@@ -18,10 +18,10 @@ from torch.optim.lr_scheduler import CyclicLR
 from torch_geometric.loader import NeighborLoader  # type: ignore
 from torch_geometric.nn import GCNConv  # type: ignore
 
-from weathergraphnet.loggers_configs import setup_logger
-from weathergraphnet.loggers_configs import setup_mlflow
-from weathergraphnet.loggers_configs import suppress_warnings
-from weathergraphnet.utils import GraphDataset
+from gwen.loggers_configs import setup_logger
+from gwen.loggers_configs import setup_mlflow
+from gwen.loggers_configs import suppress_warnings
+from gwen.utils import GraphDataset
 
 # First-party
 

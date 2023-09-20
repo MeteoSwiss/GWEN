@@ -13,13 +13,13 @@ set -o errexit
 
 VERBOSE=${VERBOSE:-false}
 
-SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}")"  &>/dev/null  && pwd)
 cd "${SCRIPT_DIR}/.."
 
 # Paths relative to project root
 paths=(
-    src/weathergraphnet
-    tests/test_weathergraphnet
+    src/gwen
+    tests/test_gwen
 )
 for path in "${paths[@]}"; do
     ${VERBOSE} && echo "mypy \"${path}\""
