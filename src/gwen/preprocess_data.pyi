@@ -1,12 +1,21 @@
+# Standard library
+from typing import Tuple
+
+# Third-party
 import xarray as xr
 from _typeshed import Incomplete
+
+# First-party
 from gwen.loggers_configs import setup_logger as setup_logger
-from typing import Tuple
 
 logger: Incomplete
 
-def split_data(data: xr.Dataset, test_size: float = ..., random_state: int = ...) -> Tuple[xr.Dataset, xr.Dataset]: ...
-def normalize_data(data_train_raw: xr.Dataset, data_test_raw: xr.Dataset, method: str = ...) -> Tuple[xr.Dataset, xr.Dataset]: ...
+def split_data(
+    data: xr.Dataset, test_size: float = ..., random_state: int = ...
+) -> Tuple[xr.Dataset, xr.Dataset]: ...
+def normalize_data(
+    data_train_raw: xr.Dataset, data_test_raw: xr.Dataset, method: str = ...
+) -> Tuple[xr.Dataset, xr.Dataset]: ...
 
 compressor: Incomplete
 data_zarr: Incomplete

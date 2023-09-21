@@ -91,6 +91,7 @@ repos:
         language: system
         entry: flake8
         types: [python]
+        args: [--max-line-length=88]
 -   repo: local
     hooks:
     -   id: mypy

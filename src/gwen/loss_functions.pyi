@@ -1,7 +1,12 @@
-from _typeshed import Incomplete
-from gwen.loggers_configs import setup_logger as setup_logger
-from torch import nn
+# Standard library
 from typing import Any
+
+# Third-party
+from _typeshed import Incomplete
+from torch import nn
+
+# First-party
+from gwen.loggers_configs import setup_logger as setup_logger
 
 logger: Incomplete
 

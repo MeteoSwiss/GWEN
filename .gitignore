@@ -110,9 +110,9 @@ venv_*/
 # VS Code
 .vscode
 
+logs
 output
 data
 mlruns
 src/gwen/example_gnn.py
 src/gwen/SAL.py
-logs

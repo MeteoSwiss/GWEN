@@ -14,6 +14,7 @@ dependencies:
   - boa>=0.14
   - codespell>=2.2
   - conda-build>=3.23
+  - dask
   - flake8-black>=0.3
   - flake8>=6.0
   - ipdb>=0.13
@@ -28,12 +29,14 @@ dependencies:
   - pyprojroot
   - pytest>=7.2
   - pytorch
+  - pytorch-lightning
   - rich>=12.6
   - rope>=1.6
   - rstcheck>=6.1
   - sphinx-autobuild>=2021.3
   - sphinx>=4.3
   - toml>=0.10
+  - torch_geometric
   - types-setuptools>=65.6
   - types-toml>=0.10
   - xarray>=2023.5.0
