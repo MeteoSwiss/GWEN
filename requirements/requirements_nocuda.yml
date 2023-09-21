@@ -40,5 +40,5 @@ dependencies:
   - types-toml>=0.10
   - xarray>=2023.5.0
   - zarr
-pip:
-  - torch_geometric
+  - pip:
+    - torch_geometric
