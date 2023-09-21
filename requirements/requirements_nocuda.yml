@@ -36,8 +36,9 @@ dependencies:
   - sphinx-autobuild>=2021.3
   - sphinx>=4.3
   - toml>=0.10
-  - torch_geometric
   - types-setuptools>=65.6
   - types-toml>=0.10
   - xarray>=2023.5.0
   - zarr
+pip:
+  - torch_geometric
