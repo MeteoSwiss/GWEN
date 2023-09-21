@@ -10,13 +10,13 @@ There are two installation types, a production installation, which is static, an
 Preparation
 -----------
 
-To install WeatherGraphNet you need a miniconda installation. You can either set up your miniconda installation manually or use the script `tools/setup_miniconda.sh`, which will download and install the latest version of miniconda.
+To install gwen you need a miniconda installation. You can either set up your miniconda installation manually or use the script `tools/setup_miniconda.sh`, which will download and install the latest version of miniconda.
 
 
 Installation of dependencies
 ----------------------------
 
-Dependencies are handled by the conda package manager. The goal of this step is to set up a conda environment according to the requirements of WeatherGraphNet. Note that by design, there are some dependencies already when you start developing the package, as the environment includes linters and other development tools.
+Dependencies are handled by the conda package manager. The goal of this step is to set up a conda environment according to the requirements of gwen. Note that by design, there are some dependencies already when you start developing the package, as the environment includes linters and other development tools.
 
 The dependencies are handled in requirement files. Free installations are based on the `requirements/requirements.yml` file, where the top-level dependencies of the package are listed. Pinned installations are based on exported environments and stored in the file `requirements/environment.yml`.
 
@@ -31,7 +31,7 @@ This will create an up-to-date environment that can be exported to `requirements
 You can control the environment name with the flag `-n` and the Python version with `-v`. Run :code:`./tools/setup_env -h` for available options and defaults (incl. mamba support).
 
 
-Installation of WeatherGraphNet
+Installation of gwen
 -----------------------------------------------
 
 After creating and activating your environment by running
@@ -39,9 +39,9 @@ After creating and activating your environment by running
 .. code-block:: console
 
     $ ./tools/setup_env.sh
-    $ conda activate weathergraphnet
+    $ conda activate gwen
 
-in the root folder of weathergraphnet, type
+in the root folder of gwen, type
 
 .. code-block:: console
 
@@ -63,7 +63,7 @@ If you need to add new first-level dependencies to your package, make sure to in
 
 .. code-block:: console
 
-    $ conda env export weathergraphnet requirements/environment.yml
+    $ conda env export gwen requirements/environment.yml
 
 or you can reinstall with the setup script from `requirements/requirements.yml` and directly export the environment with the `-e` flag.
 

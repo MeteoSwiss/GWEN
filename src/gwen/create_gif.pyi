@@ -11,7 +11,7 @@ from matplotlib.figure import Figure
 from matplotlib.image import AxesImage
 
 # First-party
-from weathergraphnet.logger import setup_logger as setup_logger
+from gwen.loggers_configs import setup_logger as setup_logger
 
 logger: Incomplete
 

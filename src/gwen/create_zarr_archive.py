@@ -9,8 +9,8 @@ import numcodecs  # type: ignore
 import xarray as xr
 
 # First-party
-from weathergraphnet.logger import setup_logger
-from weathergraphnet.utils import load_config
+from gwen.loggers_configs import load_config
+from gwen.loggers_configs import setup_logger
 
 config_dict = load_config()
 

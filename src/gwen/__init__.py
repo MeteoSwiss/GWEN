@@ -1,4 +1,4 @@
-"""Top-level package for WeatherGraphNet."""
+"""Top-level package for gwen."""
 # Standard library
 import importlib.metadata
 

@@ -18,7 +18,7 @@ import xarray as xr
 from pyprojroot import here
 
 # First-party
-from weathergraphnet.logger import setup_logger
+from gwen.loggers_configs import setup_logger
 
 logger = setup_logger()
 

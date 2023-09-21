@@ -5,53 +5,15 @@ from unittest import mock
 
 # Third-party
 import torch
-from torch import Tensor
 
 # First-party
-from weathergraphnet.models import EvaluationConfigCNN
-from weathergraphnet.models import EvaluationConfigGNN
-from weathergraphnet.models import GNNConfig
-from weathergraphnet.models import GNNModel
-from weathergraphnet.models import TrainingConfigCNN
-from weathergraphnet.models import TrainingConfigGNN
-from weathergraphnet.models import UNet
+from gwen.models_cnn import EvaluationConfigCNN
+from gwen.models_cnn import TrainingConfigCNN
+from gwen.models_cnn import UNet
+from gwen.models_gnn import GNNModel
 
 
 class TestGNNModel(unittest.TestCase):
-    def setUp(self):
-        configs_train = {
-            "loader_train_in": [torch.randn(10, 5) for _ in range(3)],
-            "loader_train_out": [torch.randn(10, 1) for _ in range(3)],
-            "optimizer": mock.MagicMock(),
-            "scheduler": None,
-            "loss_fn": torch.nn.MSELoss(),
-            "mask": Tensor | None,
-            "epochs": 10,
-            "device": "cuda",
-            "seed": 42,
-        }
-
-        configs_gnn = {
-            "nodes_in": 10,
-            "nodes_out": 10,
-            "channels_in": 10,
-            "channels_out": 10,
-            "hidden_feats": 10,
-        }
-
-        configs_test = {
-            "loader_in": [torch.randn(10, 5) for _ in range(3)],
-            "loader_out": [torch.randn(10, 1) for _ in range(3)],
-            "loss_fn": torch.nn.MSELoss(),
-            "mask": Tensor | None,
-            "device": "cuda",
-            "seed": 42,
-        }
-
-        self.configs_train = TrainingConfigGNN(**configs_train)
-        self.configs_test = EvaluationConfigGNN(**configs_test)
-        self.configs_gnn = GNNConfig(**configs_gnn)
-
     def test_train_with_configs(self):
         model = GNNModel(self.configs_gnn)
         model.conv_layers = mock.MagicMock()
@@ -62,7 +24,7 @@ class TestGNNModel(unittest.TestCase):
         )
         model.activation = torch.nn.ReLU()
 
-        model.train_with_configs(self.configs_train)
+        model.train_with_configs(0, self.configs_train, 1)
 
         self.assertEqual(model.conv_layers.call_count, 6)
         self.assertEqual(model.pool_layer.call_count, 6)
@@ -90,7 +52,7 @@ class TestGNNModel(unittest.TestCase):
 
 
 class TestUNet(unittest.TestCase):
-    # TODO test with different input shapes
+    # HACK test with different input shapes
     def setUp(self):
         self.channels_in = 100
         self.channels_out = 25
@@ -119,10 +81,10 @@ class TestUNet(unittest.TestCase):
         model = UNet(self.channels_in, self.channels_out, self.hidden_size)
         configs = {
             "epochs": 2,
-            "dataloader": [
+            "dataset": [
                 (torch.randn(self.input_shape), torch.randn(self.output_shape))
             ],
-            "device": "cuda",
+            "device": "cpu",
             "optimizer": torch.optim.Adam(model.parameters()),
             "scheduler": None,
             "loss_fn": torch.nn.MSELoss(),
@@ -130,15 +92,15 @@ class TestUNet(unittest.TestCase):
             "seed": 42,
         }
         configs_train = TrainingConfigCNN(**configs)
-        model.train_with_configs(configs_train)
+        model.train_with_configs(0, configs_train, 1)
 
     def test_eval_with_configs(self):
         model = UNet(self.channels_in, self.channels_out, self.hidden_size)
         configs = {
-            "dataloader": [
+            "dataset": [
                 (torch.randn(self.input_shape), torch.randn(self.output_shape))
             ],
-            "device": "cuda",
+            "device": "cpu",
             "loss_fn": torch.nn.MSELoss(),
             "mask": None,
             "seed": 42,

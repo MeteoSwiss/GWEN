@@ -4,15 +4,15 @@ _src_path: git@github.com:MeteoSwiss-APN/mch-python-blueprint.git
 email: simon.adamov@meteoswiss.ch
 full_name: Simon Adamov
 github_username: MeteoSwiss
-module_name: weathergraphnet
-project_doc_url: https://github.io/MeteoSwiss/weathergraphnet
-project_github: https://github.com/MeteoSwiss/weathergraphnet
-project_keywords: WeatherGraphNet, GNN, DeepLearning, Ensembles, ICON, WeatherML
-project_name: WeatherGraphNet
-project_short_description: Simon Adamov's WeatherGraphNet to Generate Weather Model
+module_name: GWEN
+project_doc_url: https://github.io/MeteoSwiss/GWEN
+project_github: https://github.com/MeteoSwiss/GWEN
+project_keywords: GWEN, GNN, DeepLearning, Ensembles, ICON, WeatherML
+project_name: GWEN
+project_short_description: GWEN is a Graph Neural Network to Generate Weather Model
     Ensemble Members
-project_slug: weathergraphnet
-project_ssh_url: git+ssh://git@github.com/MeteoSwiss/weathergraphnet.git
+project_slug: gwen
+project_ssh_url: git+ssh://git@github.com/MeteoSwiss/GWEN.git
 python_version: '3.10'
 version: 0.1.0
 year: '2023'

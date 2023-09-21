@@ -28,7 +28,7 @@ from matplotlib.image import AxesImage
 from pyprojroot import here
 
 # First-party
-from weathergraphnet.logger import setup_logger
+from gwen.loggers_configs import setup_logger
 
 logger = setup_logger()
 
@@ -54,7 +54,7 @@ def get_member_parts(nc_file: str) -> Tuple[str, ...]:
         else:
             filename_parts = nc_file.split("_")[:-1]
     except IndexError:
-        logger.info("Error in getting member parts, check your file!")
+        logger.error("Error in getting member parts, check your file!")
     return tuple(filename_parts)
 
 
@@ -232,7 +232,6 @@ def main(input_file: str, var_name: str, out_dir: str) -> None:
 
     """
     # Create the output directory if it doesn't exist
-    print("Entered main function")
     os.makedirs(out_dir, exist_ok=True)
 
     # Open the dataset
@@ -295,7 +294,6 @@ if __name__ == "__main__":
             help="The path to the output directory.",
         )
         def cli(input_file_cli: str, var_name_cli: str, output_dir_cli: str) -> None:
-            print("Entered cli function")
             try:
                 main(input_file_cli, var_name_cli, output_dir_cli)
             except FileNotFoundError as e:

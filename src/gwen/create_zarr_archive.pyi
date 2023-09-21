@@ -3,8 +3,8 @@ import xarray as xr
 from _typeshed import Incomplete
 
 # First-party
-from weathergraphnet.logger import setup_logger as setup_logger
-from weathergraphnet.utils import load_config as load_config
+from gwen.loggers_configs import load_config as load_config
+from gwen.loggers_configs import setup_logger as setup_logger
 
 config_dict: Incomplete
 logger: Incomplete

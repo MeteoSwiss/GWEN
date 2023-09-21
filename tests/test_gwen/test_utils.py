@@ -1,4 +1,4 @@
-"""Tests for the weathergraphnet.utils module."""
+"""Tests for the gwen.utils module."""
 # Standard library
 import json
 import os
@@ -8,20 +8,18 @@ import pytest
 import xarray as xr
 
 # First-party
-from weathergraphnet.models import GNNModel
-from weathergraphnet.models import UNet
-from weathergraphnet.utils import load_best_model
-from weathergraphnet.utils import load_config_and_data
-from weathergraphnet.utils import load_data
-from weathergraphnet.utils import setup_mlflow
+from gwen.loggers_configs import setup_mlflow
+from gwen.models_cnn import UNet
+from gwen.models_gnn import GNNModel
+from gwen.utils import load_best_model
+from gwen.utils import load_config_and_data
+from gwen.utils import load_data
 
 
 @pytest.fixture(scope="module")
 def config():
     with open(
-        os.path.join(
-            os.path.dirname(__file__), "../../src/weathergraphnet/config.json"
-        ),
+        os.path.join(os.path.dirname(__file__), "../../src/gwen/config.json"),
         "r",
         encoding="UTF-8",
     ) as f:
@@ -37,7 +35,7 @@ def data(config_json):
 
 @pytest.fixture(scope="module")
 def experiment_name():
-    return "WGN"
+    return "GWEN"
 
 
 def test_load_best_model(exp_name):

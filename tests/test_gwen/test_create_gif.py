@@ -15,12 +15,12 @@ from matplotlib import animation
 from pyprojroot import here
 
 # First-party
-from weathergraphnet.create_gif import create_animation_object
-from weathergraphnet.create_gif import create_update_function
-from weathergraphnet.create_gif import get_member_name
-from weathergraphnet.create_gif import main
-from weathergraphnet.create_gif import save_animation
-from weathergraphnet.utils import load_config
+from gwen.create_gif import create_animation_object
+from gwen.create_gif import create_update_function
+from gwen.create_gif import get_member_name
+from gwen.create_gif import main
+from gwen.create_gif import save_animation
+from gwen.loggers_configs import load_config
 
 config = load_config()
 

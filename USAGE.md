@@ -1,13 +1,13 @@
 # Usage
 
-Use WeatherGraphNet in a project:
+Use gwen in a project:
 
 ```python
-import weathergraphnet
+import gwen
 ```
 
 Before running, make sure to activate your project environment:
 
 ```bash
-conda activate weathergraphnet
+conda activate gwen
 ```

@@ -6,7 +6,7 @@ import xarray as xr
 from _typeshed import Incomplete
 
 # First-party
-from weathergraphnet.logger import setup_logger as setup_logger
+from gwen.loggers_configs import setup_logger as setup_logger
 
 logger: Incomplete
 

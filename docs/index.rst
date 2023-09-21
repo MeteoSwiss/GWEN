@@ -1,4 +1,4 @@
-Welcome to WeatherGraphNet's documentation!
+Welcome to gwen's documentation!
 ===========================================================
 
 .. toctree::

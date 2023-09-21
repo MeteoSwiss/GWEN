@@ -1,4 +1,4 @@
-name: weathergraphnet
+name: gwen
 channels:
   - conda-forge
   - nvidia
@@ -20,6 +20,8 @@ dependencies:
   - dask-ml
   - flake8-black>=0.3
   - flake8>=6.0
+  - gcc>=5.5
+  - gxx>=5.5
   - ipdb>=0.13
   - ipython>=8.7
   - isort>=5.12
@@ -27,7 +29,7 @@ dependencies:
   - mamba>=1.1
   - matplotlib>=3.7.1
   - mccabe>=0.7
-  - mlflow
+  - mlflow=2.5 #BUG: mlflow is working on a patch for >2.5 and pydantic V2
   - mypy>=0.991
   - notebook
   - pre-commit>=2.20
@@ -69,5 +71,10 @@ dependencies:
     - nvidia-nccl-cu11
     - nvidia-nvtx-cu11
     - restructuredtext_lint
+    - rstcheck-core>=1.1.1
     - sphinx-mdinclude>=0.5
     - torch_geometric
+    - torch_scatter
+    - torch_cluster
+    - torch_spline_conv
+    - torch-sparse

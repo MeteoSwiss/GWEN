@@ -110,7 +110,9 @@ venv_*/
 # VS Code
 .vscode
 
+logs
 output
 data
 mlruns
-src/weathergraphnet/example_gnn.py
+src/gwen/example_gnn.py
+src/gwen/SAL.py
